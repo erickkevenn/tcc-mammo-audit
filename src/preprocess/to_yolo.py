@@ -1,18 +1,28 @@
 """Conversao VinDr -> dataset YOLO, por braco de ablacao (B0..B4).
 
 Uso:
-    python -m src.preprocess.to_yolo --arm B0 --limit 300 --split training
+    python -m src.preprocess.to_yolo --arm B0 --limit 5       # amostra: 5 positivas + 5 normais por split
     python -m src.preprocess.to_yolo --arm B0                 # tudo
 
 Faz, por imagem: leitura DICOM -> Modality LUT -> mascara/bbox da mama ->
 crop -> intensidade (janela ou Winsor) -> CLAHE (se o braco pedir) ->
 flip canonico -> resize+pad -> PNG + rotulo YOLO com as caixas MAPEADAS.
 
+Splits (desde 30/09/2026, ver src/data/vindr_splits.py):
+    training : treino oficial menos a validacao, positivas + uma fracao de normais
+    val      : ~10% dos ESTUDOS do treino oficial, positivas + normais
+    test     : teste oficial intocado, positivas + normais
+Imagem normal sai com arquivo de rotulo vazio (background para o YOLO).
+
+Saida padrao: <cache>/yolo_<arm>_v2 (o cache antigo yolo_<arm>, com val=teste
+e sem normais, fica onde esta para reproduzir o M1).
+
 O mapeamento de caixa e o ponto onde tudo silenciosamente da errado: rode
 tests/test_bbox_mapping.py antes de treinar qualquer coisa.
 """
 from __future__ import annotations
 import argparse
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +30,7 @@ from tqdm import tqdm
 
 from ..config import dset, load, paths
 from ..data.vindr import load_findings
+from ..data.vindr_splits import image_table, plan_images, summary
 from .breast_roi import breast_bbox, breast_mask, canonical_flip, map_bbox, resize_and_pad
 from .dicom_io import apply_windowing, finalize_polarity, read_dicom, winsor_scale
 from .roi_input import for_roi
@@ -87,8 +98,18 @@ def process_one(dcm_path: Path, boxes, arm_cfg: dict, pre: dict):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--arm", default=None, help="B0..B4 (default: preprocess.yaml)")
-    ap.add_argument("--split", default=None, choices=["training", "test"])
-    ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--split", default=None, choices=["training", "val", "test"])
+    ap.add_argument("--limit", type=int, default=0,
+                    help="amostra: ate N positivas e N normais POR SPLIT (0 = todas)")
+    ap.add_argument("--val-frac", type=float, default=0.10,
+                    help="fracao dos estudos do treino oficial usada como validacao")
+    ap.add_argument("--train-neg-ratio", type=float, default=0.25,
+                    help="imagens normais no treino por imagem positiva")
+    ap.add_argument("--eval-neg-frac", type=float, default=1.0,
+                    help="fracao das normais mantida em val/teste (1.0 no numero final)")
+    ap.add_argument("--dry-run", action="store_true", help="so mostra o plano, nao converte")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="apaga images/ e labels/ da pasta de saida antes de escrever")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -98,49 +119,57 @@ def main() -> None:
     arm = args.arm or pre["default_arm"]
     arm_cfg = pre["arms"][arm]
     classes = load("detector_mass.yaml")["classes"]
-    cls_idx = {c: i for i, c in enumerate(classes)}
 
-    df = load_findings()
+    img = image_table(load_findings(), classes)
+    n_out = int((img.role == "out").sum())
+    plan = plan_images(img, args.val_frac, args.train_neg_ratio, args.eval_neg_frac)
     if args.split:
-        df = df[df.split == args.split]
-    df = df[df.has_box]
+        plan = plan[plan.split == args.split]
+    if args.limit:
+        plan = plan.groupby(["split", "role"], group_keys=False).head(args.limit)
+
+    print(f"plano ({n_out} imagens so com classes fora do detector ficaram de fora):")
+    print(summary(plan).to_string())
+    if args.dry_run:
+        return
+
+    out_root = Path(args.out or f"{paths()['out']['cache']}/yolo_{arm}_v2")
+    existing = out_root / "images"
+    if existing.exists() and any(existing.rglob("*.png")):
+        if not args.overwrite:
+            raise SystemExit(f"{out_root} ja tem imagens. Use --overwrite para refazer "
+                             f"(imagens velhas misturariam os splits).")
+        shutil.rmtree(out_root / "images", ignore_errors=True)
+        shutil.rmtree(out_root / "labels", ignore_errors=True)
 
     root = dset("vindr")
-    out_root = Path(args.out or f"{paths()['out']['cache']}/yolo_{arm}")
-    grouped = list(df.groupby(["study_id", "image_id"]))
-    if args.limit:
-        grouped = grouped[: args.limit]
-
     n_ok = n_skip = 0
-    for (study_id, image_id), g in tqdm(grouped, desc=f"braco {arm}"):
-        boxes = []
-        for _, r in g.iterrows():
-            for cat in r["categories_mapped"]:
-                if cat in cls_idx:
-                    boxes.append((r.xmin, r.ymin, r.xmax, r.ymax, cls_idx[cat]))
-        if not boxes:
-            continue
-        dcm = root / paths()["vindr"]["images"] / study_id / f"{image_id}.dicom"
+    records = []
+    for r in tqdm(plan.itertuples(index=False), total=len(plan), desc=f"braco {arm}"):
+        dcm = root / paths()["vindr"]["images"] / r.study_id / f"{r.image_id}.dicom"
         if not dcm.exists():
             dcm = dcm.with_suffix(".dcm")
         if not dcm.exists():
             n_skip += 1
             continue
-        res = process_one(dcm, boxes, arm_cfg, pre)
+        res = process_one(dcm, r.boxes, arm_cfg, pre)
         if res is None:
             n_skip += 1
             continue
-        img, mapped, _ = res
-        split = str(g.iloc[0]["split"])
-        (out_root / "images" / split).mkdir(parents=True, exist_ok=True)
-        (out_root / "labels" / split).mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(out_root / "images" / split / f"{image_id}.png"), img)
-        with open(out_root / "labels" / split / f"{image_id}.txt", "w") as fh:
+        out_img, mapped, _ = res
+        (out_root / "images" / r.split).mkdir(parents=True, exist_ok=True)
+        (out_root / "labels" / r.split).mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(out_root / "images" / r.split / f"{r.image_id}.png"), out_img)
+        with open(out_root / "labels" / r.split / f"{r.image_id}.txt", "w") as fh:
             for cls, cx, cy, bw, bh in mapped:
                 fh.write(f"{cls} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}\n")
+        records.append({"image_id": r.image_id, "study_id": r.study_id, "split": r.split,
+                        "role": r.role, "n_boxes": len(mapped)})
         n_ok += 1
 
-    yaml_txt = (f"path: {out_root}\ntrain: images/training\nval: images/test\n"
+    import pandas as pd
+    pd.DataFrame(records).to_csv(out_root / "split_manifest.csv", index=False)
+    yaml_txt = (f"path: {out_root}\ntrain: images/training\nval: images/val\ntest: images/test\n"
                 f"names:\n" + "".join(f"  {i}: {c}\n" for i, c in enumerate(classes)))
     (out_root / "data.yaml").write_text(yaml_txt, encoding="utf-8")
     print(f"\n{n_ok} imagens escritas, {n_skip} ignoradas -> {out_root}")

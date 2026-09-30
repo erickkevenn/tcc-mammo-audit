@@ -18,12 +18,26 @@ from __future__ import annotations
 import numpy as np
 
 
+def _clip_level(work: np.ndarray, pct: float = 95.0) -> float:
+    """Nivel do corte "p95" calculado SO sobre os pixels que nao sao fundo.
+
+    Corrigido em 30/09/2026. O p95 do quadro inteiro so funciona quando a mama
+    domina a imagem. Em mama pequena (vista CC ocupando 6-10% do quadro), o p95
+    cai DENTRO da mama e o corte apaga o tecido mais denso: o contorno encolhia
+    para 1-4%, ficava abaixo do limite de 4% e o recorte era abandonado (as 20
+    falhas de 300 da S2 eram todas assim). Mesmo quando o recorte passava, parte
+    da regiao densa, onde as massas aparecem, podia sair do contorno.
+    """
+    fg = work[work > work.min()]
+    return float(np.percentile(fg, pct)) if fg.size else float(work.max())
+
+
 def breast_bbox(img: np.ndarray, area_pct_thres: float = 0.04) -> tuple[int, int, int, int] | None:
     """Retorna (x0, y0, x1, y1) ou None se a deteccao for implausivel."""
     import cv2
 
     work = img.astype(np.float32).copy()
-    upper = np.percentile(work, 95)
+    upper = _clip_level(work)
     work[work > upper] = work.min()                          # mata implantes e linhas brancas
 
     work = work - work.min()
@@ -50,7 +64,7 @@ def breast_mask(img: np.ndarray) -> np.ndarray:
     import cv2
 
     work = img.astype(np.float32).copy()
-    upper = np.percentile(work, 95)
+    upper = _clip_level(work)
     work[work > upper] = work.min()
     work = work - work.min()
     denom = work.max() if work.max() > 0 else 1.0
