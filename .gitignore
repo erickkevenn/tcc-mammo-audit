@@ -1,0 +1,32 @@
+# --- ambiente Python ---
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- dados e derivados: NUNCA versionar ---
+# VinDr-Mammo (licença PhysioNet), CBIS-DDSM e INbreast não podem ser redistribuídos.
+# Isso inclui imagens convertidas, mosaicos de treino e HTML com trecho de laudo.
+*.dcm
+*.dicom
+*.png
+*.jpg
+*.jpeg
+*.parquet
+artifacts/
+vindr_check.txt
+
+# --- pesos e saídas de treino (ultralytics) ---
+*.pt
+*.pth
+*.onnx
+runs/
+
+# --- editor / sistema ---
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.env
+*.log

@@ -1,0 +1,11 @@
+# Caminho separado para calcificacoes suspeitas: tiles em resolucao quase nativa.
+# Justificativa: 19,1% das caixas tem < 48x48 px no original; a 640x640 viram ~15 px.
+model: yolov8s
+tile: {size: 512, stride: 448}
+target_um_per_px: 100
+batch: 8
+amp: true
+epochs: 60
+classes: [suspicious_calcification]
+match_criterion: center_in_gt_box    # IoU e instavel em objeto minusculo
+negative_tile_ratio: 3               # tiles sem lesao por tile com lesao

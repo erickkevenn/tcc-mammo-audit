@@ -1,0 +1,34 @@
+# Ajuste APENAS este arquivo ao trocar de máquina.
+root: "E:/Erick/TCC/Dataset"
+
+vindr:
+  dir: "vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"
+  images: "images"
+  breast_csv: "breast-level_annotations.csv"
+  finding_csv: "finding_annotations.csv"
+  metadata_csv: "metadata.csv"
+
+cbis:
+  dir: "cbis_ddsm"
+  metadata_dir: "metadata"
+  csvs:
+    - "mass_case_description_train_set.csv"
+    - "mass_case_description_test_set.csv"
+    - "calc_case_description_train_set.csv"
+    - "calc_case_description_test_set.csv"
+
+inbreast:
+  dir: "INBREAST/INbreast Release 1.0"
+  dicoms: "AllDICOMs"
+  xml: "AllXML"
+  reports: "MedicalReports"      # 117 laudos .txt em PORTUGUES, encoding latin-1 -- corpus PRINCIPAL de auditoria de laudo
+  csv: "INbreast.csv"            # separador ';'
+
+# CDD-CESM removido do escopo (24/08/2026): nao faz mais parte dos datasets do projeto.
+# Se voce vier a readquiri-lo, reintroduza aqui e em src/data/ seguindo o padrao de inbreast/cbis.
+
+# Saidas do projeto (fora da pasta de dados originais)
+out:
+  cache: "E:/Erick/TCC/tcc_cache"        # PNG16/PNG8 convertidos
+  manifests: "artifacts/manifests"
+  runs: "artifacts/runs"

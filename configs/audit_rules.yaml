@@ -1,0 +1,30 @@
+# Limiares do auditor. CALIBRE NO SPLIT DE VALIDACAO E CONGELE ANTES DE TOCAR NO TESTE.
+# Data de congelamento: ____/____/2026   (anote, a banca pergunta)
+tau_detect: 0.35        # ponto de operacao ~ sensibilidade @ 0,5 FP/imagem
+tau_ground: 0.25
+
+tolerances:
+  size_rel: 0.30         # +-30%
+  size_abs_mm: 5.0       # ou +-5 mm, o que for maior
+  birads_levels: 2       # discordancia se |delta| >= 2
+  birads_action_boundary: true   # ou se cruza <=3 / >=4
+  density_levels: 2
+
+region_adjacency:
+  UOQ: [upper, outer, UOQ]
+  UIQ: [upper, inner, UIQ]
+  LOQ: [lower, outer, LOQ]
+  LIQ: [lower, inner, LIQ]
+  retroareolar: [retroareolar, central]
+
+severity:
+  A1: {default: 3, birads5: 5, birads4: 4}
+  A2: {default: 3}
+  A3: {default: 4}
+  A4: {default: 2}
+  A5: {default: 2}
+  A6: {default: 3, crosses_action_boundary: 4}
+  A7: {default: 2}
+  A8: {default: 3}
+
+enabled_rules: [A1, A2, A3, A4, A5, A6, A7, A8]

@@ -1,0 +1,23 @@
+# YOLO para massas / distorcoes / assimetrias. Perfil para <= 8 GB de VRAM.
+model: yolov8s
+imgsz: [1024, 640]
+batch: 2
+accumulate: 8        # batch efetivo 16
+amp: true
+optimizer: AdamW
+lr0: 0.001
+cos_lr: true
+warmup_epochs: 3
+epochs: 80
+patience: 15
+workers: 4
+cache: false
+classes:
+  - mass
+  - architectural_distortion
+  - focal_asymmetry
+  - asymmetry
+  - global_asymmetry
+  - other_suspicious   # funde skin_thickening/retraction, nipple_retraction, lymph_node (N < 60)
+match_iou: 0.5
+# Se estourar VRAM: imgsz [896, 576], batch 1, accumulate 16.

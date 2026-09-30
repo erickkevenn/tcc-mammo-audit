@@ -1,0 +1,19 @@
+# Bracos da ablacao de pre-processamento (secao 5.3 do plano).
+# CLAHE e HIPOTESE, nao premissa: nenhuma solucao vencedora do RSNA 2023 usa CLAHE.
+arms:
+  B0:  {intensity: window, crop_breast: true,  clahe: null}
+  B1:  {intensity: winsor, crop_breast: true,  clahe: null}
+  B2:  {intensity: window, crop_breast: true,  clahe: {clip: 2.0,  tile: [8, 8]}}
+  B3:  {intensity: window, crop_breast: true,  clahe: {clip: 12.0, tile: [8, 8]}}
+  B4:  {intensity: window, crop_breast: false, clahe: null}   # controle: isola o efeito do recorte
+
+default_arm: B0
+
+winsor: {low: 1.0, high: 99.0}     # percentis DENTRO da mascara da mama
+drop_for_processing: true           # descarta PresentationIntentType == FOR PROCESSING
+remove_pectoral: false              # NAO remova (secao 5.2)
+canonical_laterality: true          # espelha para orientacao unica
+mass_size: [1024, 640]              # h, w  -- alvo para 8 GB de VRAM
+tile: {size: 512, stride: 448}      # caminho de calcificacoes, ~100 um/px
+png16_for_training: true
+png8_for_audit: true

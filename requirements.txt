@@ -1,0 +1,28 @@
+# Versões verificadas no PyPI em 2026-08-19. Trave-as: reprodutibilidade é item do CLAIM 2024.
+torch==2.13.0
+torchvision
+ultralytics
+timm==1.0.28
+pydicom==3.0.2
+dicomsdl==0.109.4
+pylibjpeg-openjpeg==2.5.0
+python-gdcm==3.2.6
+opencv-python-headless==5.0.0.93
+albumentations==2.0.8
+# stringzilla 5.1.2 (puxado pelo albucore, dependência do albumentations) saiu sem
+# wheel para cp311-win_amd64 -- pip tenta compilar do zero e exige MSVC Build Tools.
+# Trave abaixo de 5.1.2 pra pegar um wheel pronto.
+stringzilla<5.1.2
+scikit-image==0.26.0
+numpy
+pandas
+pyarrow
+scipy
+scikit-learn
+matplotlib
+PyYAML
+pydantic
+openpyxl
+tqdm
+joblib
+pytest
