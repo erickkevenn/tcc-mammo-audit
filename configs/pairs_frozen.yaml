@@ -1,0 +1,34 @@
+# Conjunto de avaliacao CONGELADO (scripts/build_pairs.py). Tabelas em artifacts/pairs/.
+# Nao alterar depois de ver qualquer resultado do teste.
+inbreast:
+  sha256: c2f4083227db5769f2ccc28b9934b643cae0503b69556334b3e7e5f23af273ab
+  semente: 20260819
+  k_doadores: 5
+  n_pares: 630
+  n_unidades: 105
+  contagens:
+    original_consistente_imagem13: 64
+    original_consistente_imagem45: 41
+    trocado_elevada_imagem13: 320
+    trocado_rebaixada_imagem45: 205
+  filtros:
+    laudos: 117
+    com_imagens: 117
+    com_categoria_no_texto: 108
+    verificaveis_1_a_5: 105
+  congelado_em: '2026-10-02'
+vindr_teste:
+  sha256: c307c04b7296876d24451820285f5e84ad012a1e9ecbce0eb904674c75d7a9c9
+  semente: 20260819
+  k_doadores: 1
+  n_pares: 4000
+  n_unidades: 2000
+  contagens:
+    original_consistente_imagem13: 1901
+    original_consistente_imagem45: 99
+    trocado_elevada_imagem13: 1901
+    trocado_rebaixada_imagem45: 99
+  filtros:
+    mamas_teste: 2000
+    estudos_teste: 1000
+  congelado_em: '2026-10-02'
