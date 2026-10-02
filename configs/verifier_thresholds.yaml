@@ -1,0 +1,13 @@
+# Limiares CONGELADOS das regras V1, V2 e V4 (scripts/calibrate_verifier.py).
+# Nao recalibrar depois de olhar o teste.
+calibrado_em: validacao VinDr-Mammo (mesma divisao dos modelos)
+alpha: 0.05
+regra: percentil (1 - alpha/2) nas mamas 1-2 para cada detector; (1 - alpha) de P(4)+P(5)
+  nas mamas 1-3
+mass: 0.422624
+calc: 0.269185
+cls_ge4: 0.176761
+modelos:
+  massa: det_mass_B0_v2_neg1
+  calcificacao: det_calc_B0
+  classificador: cls_b2_imagenet
