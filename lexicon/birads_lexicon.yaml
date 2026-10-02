@@ -17,7 +17,7 @@ meta:
 
 category:
   mass:
-    pt: [nodulo, nódulo, nodulos, nódulos, massa, massas, opacidade nodular, imagem nodular]
+    pt: [imagem nodular, imagens nodulares, formacao nodular, formacoes nodulares, opacidade nodular, opacidades nodulares, nodulo, nódulo, nodulos, nódulos, massa, massas, opacidade nodular, imagem nodular]
     en: [mass, mass lesion, nodule, soft tissue opacity, nodular opacity]
     radlex: RID34261
   suspicious_calcification:
@@ -133,8 +133,31 @@ density_acr:
 
 negation:
   pt: [sem, ausencia de, ausência de, nao ha, não há, nao se observa, não se observa,
-       nao evidencia, sem evidencia de, negativa, negativo, ausentes, nao identificado]
+       nao evidencia, sem evidencia de, negativa, negativo, ausentes, nao identificado,
+       # portugues europeu (laudos do INbreast, Porto)
+       nao se individualiza, nao se individualizam, nao se identifica, nao se identificam,
+       nao se observam, nao se visualiza, nao se visualizam, nao se documenta,
+       nao se documentam, nao se detecta, nao se detectam, nao foram identificad,
+       nao foram observad, nao apresenta, nao sao aparentes, nao e aparente, nao sao visiveis,
+       nao e visivel, nao se reconhece, nao se reconhecem,
+       # hipotese, nao achado ('podem ocultar pequenos nodulos')
+       ocultar, podem diminuir]
   en: ["no", without, absence of, not seen, no evidence of, negative for, free of, unremarkable]
+
+# Qualificador de cada achado AFIRMADO, procurado perto do termo do achado
+# (ate 40 caracteres antes e 80 depois, sem passar de ';'). Sem pista -> None.
+suspicion:
+  benign:
+    pt: [benign, benignidade, nao suspeit, sem suspeic, vascular, grosseir, dispers, em pipoca, cutane, leite de calcio,
+         aspecto benigno, caracter benigno, sem caracteres de suspeic, sem caracteristicas de suspeic,
+         quist, fibroadenoma, circunscrit, ganglio intramamario, sem significado]
+    en: [benign, vascular, coarse, scattered, popcorn, dermal, milk of calcium, cyst, fibroadenoma,
+         circumscribed, intramammary lymph node]
+  suspicious:
+    pt: [suspeit, pleomorf, linear, lineares, ramificad, agrupad, agrupament, segmentar,
+         espiculad, irregular, malign, heterogene, amorf, microlobulad]
+    en: [suspicious, pleomorphic, linear, branching, grouped, clustered, segmental, spiculated,
+         irregular, malignan, suggestive, heterogeneous, amorphous, microlobulated]
 
 # Terminadores de escopo de negacao (estilo ConText): a negacao para aqui.
 negation_terminators:
@@ -146,4 +169,6 @@ negation_terminators:
 discard_sections:
   en: ["CONTRAST ENHANCED SPECTRAL MAMMOGRAPHY", "CONTRAST ENHANCED", "ULTRASOUND", "US REVEALED"]
   pt: ["ecografia", "ultrassonografia", "ultra-sonografia", "microbiopsia", "biopsia",
-       "estudo anatomopatologico", "histologico", "marcacao pre-operatoria", "axila"]
+       "estudo anatomopatologico", "histologico", "marcacao pre-operatoria", "axila",
+       # radiografia da peca de biopsia, nao e achado da mamografia
+       "fragmentos", "estereotaxia", "macrobiopsia", "mamotomia"]

@@ -61,6 +61,8 @@ class Finding(BaseModel):
     region: Region = Field(default_factory=Region)
     descriptors: Descriptors = Field(default_factory=Descriptors)
     birads: Optional[str] = None
+    # benign | suspicious | None (sem pista no texto). So para achados afirmados.
+    suspicion: Optional[Literal["benign", "suspicious"]] = None
     confidence: Optional[float] = None
     evidence: Evidence = Field(default_factory=Evidence)
 

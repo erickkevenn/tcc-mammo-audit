@@ -74,3 +74,56 @@ def test_portuguese_extraction_with_size_and_birads():
 def test_every_finding_carries_evidence():
     rec = RuleExtractor("en").extract(SYNTHETIC_EN, "P1", "L")
     assert all(f.evidence.sentence_text for f in rec.findings)
+
+
+# --- portugues europeu (frases de teste escritas para o teste, nao sao laudos) ---
+def test_european_portuguese_negation_covers_long_list():
+    from src.report.extract_rules import RuleExtractor
+    from src.report.schema import Status
+    txt = ("Nao se individualizam imagens nodulares que sugiram malignidade, "
+           "micro-calcificacoes suspeitas ou outras alteracoes significativas.")
+    rec = RuleExtractor("pt").extract(txt, "t", "L")
+    st = {f.category: f.status for f in rec.findings}
+    assert st.get("mass") == Status.NEGATED
+    assert st.get("suspicious_calcification") == Status.NEGATED
+
+
+def test_benign_and_suspicious_qualifier():
+    from src.report.extract_rules import RuleExtractor
+    ext = RuleExtractor("pt")
+    ben = ext.extract("Observam-se raras microcalcificacoes benignas dispersas.", "t", "L")
+    sus = ext.extract("Observa-se agrupamento de microcalcificacoes pleomorficas.", "t", "L")
+    unk = ext.extract("Observam-se microcalcificacoes.", "t", "L")
+    get = lambda r: [f.suspicion for f in r.findings if f.category == "suspicious_calcification"][0]
+    assert get(ben) == "benign" and get(sus) == "suspicious" and get(unk) is None
+
+
+def test_negation_still_stops_at_terminator():
+    from src.report.extract_rules import RuleExtractor
+    from src.report.schema import Status
+    rec = RuleExtractor("pt").extract(
+        "Sem alteracoes cutaneas, porem observa-se nodulo espiculado.", "t", "L")
+    assert [f.status for f in rec.findings if f.category == "mass"] == [Status.AFFIRMED]
+
+
+def test_line_break_inside_sentence_keeps_negation():
+    from src.report.extract_rules import RuleExtractor
+    from src.report.schema import Status
+    txt = "Nao se individualizam\nimagens nodulares que sugiram malignidade."
+    rec = RuleExtractor("pt").extract(txt, "t", "L")
+    assert [f.status for f in rec.findings if f.category == "mass"] == [Status.NEGATED]
+
+
+def test_broken_words_are_joined():
+    from src.report.extract_rules import RuleExtractor
+    rec = RuleExtractor("pt").extract("Observam-se microcalcifica coes pleomorficas.", "t", "L")
+    assert any(f.category == "suspicious_calcification" for f in rec.findings)
+
+
+def test_suggestive_of_benignity_is_benign():
+    from src.report.extract_rules import RuleExtractor
+    ext = RuleExtractor("pt")
+    a = ext.extract("Existem microcalcificacoes sugestivas de benignidade.", "t", "L")
+    b = ext.extract("Existem microcalcificacoes grosseiras, nao suspeitas.", "t", "L")
+    for r in (a, b):
+        assert [f.suspicion for f in r.findings if f.category == "suspicious_calcification"] == ["benign"]

@@ -29,6 +29,14 @@ def norm(text: str) -> str:
     return "".join(c for c in t if not unicodedata.combining(c))
 
 
+_BROKEN = re.compile(r"(\w) (coes|cao|oes|afico|afica|aficos|aficas)\b")
+
+
+def _join_broken(s: str) -> str:
+    """Junta palavras partidas pela extracao do texto ('calcifica coes', 'mamogr afico')."""
+    return _BROKEN.sub(r"\1\2", s)
+
+
 class RuleExtractor:
     def __init__(self, language: str = "en"):
         self.lex = lexicon()
@@ -63,9 +71,32 @@ class RuleExtractor:
             between = window[idx + len(n):]
             if any(t in between for t in self.terms):
                 continue          # o escopo da negacao terminou antes do achado
-            if len(between) <= 60:
+            # 120 caracteres: no portugues europeu a negacao cobre listas longas
+            # ('nao se individualizam imagens nodulares que sugiram malignidade,
+            # micro-calcificacoes suspeitas ou...'). Terminadores cortam antes.
+            if len(between) <= 120:
                 return True
         return False
+
+    def _suspicion(self, sentence_norm: str, pos: int, length: int) -> str | None:
+        """benign / suspicious pelas pistas perto do termo do achado; None se nada."""
+        start = max(0, pos - 40)
+        end = pos + length + 80
+        semi = sentence_norm.find(";", pos)
+        if semi >= 0:
+            end = min(end, semi)
+        win = sentence_norm[start:end]
+        found = {}
+        for label in ("benign", "suspicious"):
+            for cue in self.lex.get("suspicion", {}).get(label, {}).get(self.lang, []) + \
+                    self.lex.get("suspicion", {}).get(label, {}).get("en", []):
+                i = win.find(norm(str(cue)))
+                if i >= 0:
+                    d = abs((start + i) - pos)
+                    found[label] = min(found.get(label, 10 ** 6), d)
+        if not found:
+            return None
+        return min(found, key=found.get)       # a pista mais proxima do achado decide
 
     # ------------------------------------------------------------------ publico
     def extract(self, text: str, exam_id: str, laterality: str,
@@ -80,15 +111,19 @@ class RuleExtractor:
         ]
         seen: set[tuple] = set()
         for sec in sections:
-            for sentence in re.split(r"(?<=[.\n])\s*", sec.text):
-                if not sentence.strip():
+            # Frase termina em ponto ou em linha em branco. Quebra de linha simples
+            # NAO termina frase: os laudos do INbreast tem quebra no meio da frase
+            # ('Nao se individualizam\nimagens nodulares ...'), o que separava a
+            # negacao do achado.
+            for sentence in re.split(r"(?<=\.)\s+|\n\s*\n", sec.text):
+                if not sentence or not sentence.strip():
                     continue
                 # Lateralidade por sentenca tem prioridade sobre a da secao:
                 # laudos em prosa (INbreast) nao usam cabecalho por mama.
                 sent_side = detect_side(sentence)
                 if sent_side is not None and sent_side != laterality:
                     continue
-                sn = norm(sentence)
+                sn = _join_broken(norm(sentence.replace("\n", " ")))
                 offset = sec.span[0] + sec.text.find(sentence)
                 for cat, langs in self.lex["category"].items():
                     hit_pos, hit_len = -1, 0
@@ -102,6 +137,8 @@ class RuleExtractor:
                     status = Status.NEGATED if self._negated(sn, hit_pos) else Status.AFFIRMED
                     if cat == "no_finding":
                         status = Status.AFFIRMED
+                    suspicion = (self._suspicion(sn, hit_pos, hit_len)
+                                 if status == Status.AFFIRMED and cat != "no_finding" else None)
                     # Tamanho so faz sentido para achados mensuraveis. Sem este
                     # filtro, '2 cm' contamina a calcificacao negada da mesma sentenca.
                     size = None
@@ -135,6 +172,7 @@ class RuleExtractor:
                                 size_mm=size,
                             ),
                             birads=bm.group("cat").lower() if bm else None,
+                            suspicion=suspicion,
                             evidence=Evidence(
                                 sentence_span=[offset, offset + len(sentence)],
                                 sentence_text=sentence.strip(),
