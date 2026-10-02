@@ -31,7 +31,7 @@ from tqdm import tqdm
 from ..config import dset, load, paths
 from ..data.vindr import load_findings
 from ..data.vindr_splits import image_table, plan_images, summary
-from .breast_roi import breast_bbox, breast_mask, canonical_flip, map_bbox, resize_and_pad
+from .breast_roi import breast_bbox, breast_mask, canonical_flip, flip_by_content, map_bbox, resize_and_pad
 from .dicom_io import apply_windowing, finalize_polarity, read_dicom, winsor_scale
 from .roi_input import for_roi
 
@@ -41,8 +41,14 @@ def apply_clahe(img8: np.ndarray, clip: float, tile) -> np.ndarray:
     return cv2.createCLAHE(clipLimit=clip, tileGridSize=tuple(tile)).apply(img8)
 
 
-def process_one(dcm_path: Path, boxes, arm_cfg: dict, pre: dict):
+def process_one(dcm_path: Path, boxes, arm_cfg: dict, pre: dict,
+                laterality: str | None = None):
+    """laterality: usada quando o DICOM nao grava ImageLaterality (CBIS-DDSM e
+    INbreast). Sem ela o espelhamento canonico nao acontecia nessas bases."""
     arr, meta = read_dicom(dcm_path)
+    orient_by_content = not meta.get("laterality")   # DICOM sem lateralidade
+    if orient_by_content and laterality:
+        meta = dict(meta, laterality=laterality)
     if pre.get("drop_for_processing") and meta["presentation_intent"].upper() == "FOR PROCESSING":
         return None
 
@@ -73,7 +79,10 @@ def process_one(dcm_path: Path, boxes, arm_cfg: dict, pre: dict):
 
     flipped = False
     if pre.get("canonical_laterality"):
-        img8, flipped = canonical_flip(img8, meta["laterality"])
+        if orient_by_content:
+            img8, flipped = flip_by_content(img8)
+        else:
+            img8, flipped = canonical_flip(img8, meta["laterality"])
 
     h, w = img8.shape[:2]
     th, tw = pre["mass_size"]

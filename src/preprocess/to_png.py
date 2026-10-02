@@ -38,9 +38,19 @@ from tqdm import tqdm
 
 from ..config import load
 from ..data.build_manifest import find_dicoms
-from .breast_roi import breast_bbox, breast_mask, canonical_flip, resize_and_pad
+from .breast_roi import breast_bbox, breast_mask, canonical_flip, flip_by_content, resize_and_pad
 from .dicom_io import apply_windowing, finalize_polarity, read_dicom, winsor_scale
 from .roi_input import for_roi
+
+
+def laterality_from_name(name: str) -> dict:
+    """Lateralidade e vista a partir do nome no padrao do INbreast; {} se nao casar."""
+    import re
+    m = re.search(r"_MG_([RL])_([A-Z]+)_", name)
+    if not m:
+        return {}
+    view = {"ML": "MLO"}.get(m.group(2), m.group(2))
+    return {"laterality": m.group(1), "view": view}
 
 
 def process_one(dcm_path: Path, arm_cfg: dict, pre: dict) -> dict:
@@ -51,6 +61,13 @@ def process_one(dcm_path: Path, arm_cfg: dict, pre: dict) -> dict:
     """
     row: dict = {"file": dcm_path.name}
     arr, meta = read_dicom(dcm_path)
+    meta = dict(meta)
+    orient_by_content = not meta.get("laterality")   # DICOM sem lateralidade
+    if orient_by_content:
+        # INbreast nao grava ImageLaterality/ViewPosition no DICOM; os dois estao no
+        # nome do arquivo (..._MG_R_CC_ANON.dcm). Sem isso o espelhamento canonico
+        # nao acontecia e as mamas direitas ficavam com a parede toracica a direita.
+        meta.update(laterality_from_name(dcm_path.name))
     row.update({
         "laterality": meta["laterality"], "view": meta["view"],
         "photometric": meta["photometric"],
@@ -107,8 +124,13 @@ def process_one(dcm_path: Path, arm_cfg: dict, pre: dict) -> dict:
 
     flipped = False
     if pre.get("canonical_laterality"):
-        img8, flipped = canonical_flip(img8, meta["laterality"])
-        img16, _ = canonical_flip(img16, meta["laterality"])
+        if orient_by_content:
+            img8, flipped = flip_by_content(img8)
+            if flipped:
+                img16 = np.ascontiguousarray(img16[:, ::-1])
+        else:
+            img8, flipped = canonical_flip(img8, meta["laterality"])
+            img16, _ = canonical_flip(img16, meta["laterality"])
     row["flipped"] = flipped
 
     th, tw = pre["mass_size"]

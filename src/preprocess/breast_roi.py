@@ -77,6 +77,18 @@ def breast_mask(img: np.ndarray) -> np.ndarray:
     return labels == largest
 
 
+def flip_by_content(img: np.ndarray, frac: float = 0.10) -> tuple[np.ndarray, bool]:
+    """Orientacao canonica pela propria imagem: a parede toracica (borda em que o
+    tecido encosta) vai para a ESQUERDA. Usada quando o DICOM nao grava a
+    lateralidade e a orientacao do arquivo nao e confiavel (CBIS-DDSM: filmes
+    digitalizados em posicoes diferentes; INbreast). Compara o brilho medio das
+    faixas de borda esquerda e direita (frac da largura)."""
+    k = max(1, int(img.shape[1] * frac))
+    if float(img[:, -k:].mean()) > float(img[:, :k].mean()):
+        return np.ascontiguousarray(img[:, ::-1]), True
+    return img, False
+
+
 def canonical_flip(img: np.ndarray, laterality: str | None) -> tuple[np.ndarray, bool]:
     """Orientacao canonica: a parede toracica sempre a ESQUERDA da imagem.
 

@@ -218,7 +218,8 @@ def main() -> None:
                 row["skipped"] = "nenhuma caixa valida"
                 rows.append(row); n_skip += 1
                 continue
-            res = process_one(dcm, boxes, arm_cfg, pre)
+            res = process_one(dcm, boxes, arm_cfg, pre,
+                              laterality=str(g.iloc[0]["laterality"]))
         except Exception as exc:                                     # noqa: BLE001
             row["error"] = f"{type(exc).__name__}: {exc}"
             rows.append(row); n_skip += 1
