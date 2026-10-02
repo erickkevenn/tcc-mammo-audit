@@ -1,0 +1,132 @@
+% =============================================================================
+% TCC -- Auditoria automática de laudos de mamografia
+% Modelo abnTeX2 (ABNT NBR 14724). Compilar com: latexmk -pdf main.tex
+% Marcadores: \pendente{...} aparece em vermelho no PDF e indica o que falta.
+%             Para listar todos: procure "\pendente" nos arquivos .tex.
+% =============================================================================
+\documentclass[12pt, openright, oneside, a4paper, chapter=TITLE, english, brazil]{abntex2}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{indentfirst}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{icomma}          % vírgula decimal no modo matemático
+\usepackage{amsmath}
+\usepackage[brazilian, hyperpageref]{backref}
+\usepackage[alf]{abntex2cite}
+
+% ---------------------------------------------------------------- marcadores
+\newcommand{\pendente}[1]{\textcolor{red}{[Pendente: #1]}}
+
+% ---------------------------------------------------------------- backref
+\renewcommand{\backrefpagesname}{Citado na(s) página(s):~}
+\renewcommand{\backref}{}
+\renewcommand*{\backrefalt}[4]{%
+  \ifcase #1 Nenhuma citação no texto.%
+  \or Citado na página #2.%
+  \else Citado #1 vezes nas páginas #2.%
+  \fi}
+
+% ---------------------------------------------------------------- dados do trabalho
+\titulo{Auditoria automática de laudos de mamografia: detecção de omissões e discordâncias com visão computacional e o léxico BI-RADS}
+\autor{Erick Alves}
+\local{Maceió}
+\data{2026}
+\orientador{\pendente{nome do orientador}}
+\instituicao{%
+  Universidade Federal de Alagoas
+  \par
+  Instituto de Computação
+  \par
+  \pendente{nome do curso}}
+\tipotrabalho{Trabalho de Conclusão de Curso}
+\preambulo{Trabalho de Conclusão de Curso apresentado ao curso de \pendente{nome do curso} do Instituto de Computação da Universidade Federal de Alagoas, como requisito parcial para a obtenção do grau de \pendente{grau}.}
+
+\definecolor{blue}{RGB}{41,5,195}
+\makeatletter
+\hypersetup{
+  pdftitle={\@title},
+  pdfauthor={\@author},
+  pdfsubject={\imprimirpreambulo},
+  pdfcreator={LaTeX com abnTeX2},
+  pdfkeywords={mamografia}{BI-RADS}{auditoria de laudos}{visão computacional}{detecção de objetos},
+  colorlinks=true, linkcolor=blue, citecolor=blue, filecolor=magenta, urlcolor=blue,
+  bookmarksdepth=4}
+\makeatother
+
+\setlength{\parindent}{1.3cm}
+\setlength{\parskip}{0.2cm}
+\makeindex
+
+\begin{document}
+\selectlanguage{brazil}
+\frenchspacing
+
+% ============================================================ PRÉ-TEXTUAIS
+\imprimircapa
+\imprimirfolhaderosto
+
+\begin{folhadeaprovacao}
+  \pendente{folha de aprovação: preencher com a banca depois da defesa}
+\end{folhadeaprovacao}
+
+\begin{agradecimentos}
+  \pendente{agradecimentos}
+\end{agradecimentos}
+
+\input{capitulos/00-resumo}
+
+\pdfbookmark[0]{\listfigurename}{lof}
+\listoffigures*
+\cleardoublepage
+\pdfbookmark[0]{\listtablename}{lot}
+\listoftables*
+\cleardoublepage
+
+\begin{siglas}
+  \item[ACR] \textit{American College of Radiology}
+  \item[AP] \textit{Average Precision} (precisão média)
+  \item[AUC] Área sob a curva ROC
+  \item[BI-RADS] \textit{Breast Imaging Reporting and Data System}
+  \item[CC] Vista craniocaudal
+  \item[CLAHE] \textit{Contrast Limited Adaptive Histogram Equalization}
+  \item[DICOM] \textit{Digital Imaging and Communications in Medicine}
+  \item[FROC] \textit{Free-response Receiver Operating Characteristic}
+  \item[IC] Intervalo de confiança
+  \item[LLM] \textit{Large Language Model} (modelo de linguagem de grande porte)
+  \item[MLO] Vista mediolateral oblíqua
+  \item[ROI] Região de interesse
+  \item[VLM] \textit{Vision-Language Model} (modelo de visão e linguagem)
+\end{siglas}
+
+\pdfbookmark[0]{\contentsname}{toc}
+\tableofcontents*
+\cleardoublepage
+
+% ============================================================ TEXTUAIS
+\textual
+\input{capitulos/01-introducao}
+\input{capitulos/02-fundamentacao}
+\input{capitulos/03-metodologia}
+\input{capitulos/04-resultados}
+\input{capitulos/05-discussao}
+\input{capitulos/06-conclusao}
+
+% ============================================================ PÓS-TEXTUAIS
+\postextual
+\bibliography{referencias}
+
+\begin{apendicesenv}
+\partapendices
+\chapter{Checklist CLAIM 2024}
+\pendente{preencher os itens do checklist CLAIM \cite{tejani2024claim} à medida que a metodologia for escrita (S16)}
+\end{apendicesenv}
+
+\printindex
+\end{document}

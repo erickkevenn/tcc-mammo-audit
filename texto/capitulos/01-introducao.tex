@@ -1,0 +1,52 @@
+% =============================================================================
+\chapter{Introdução}\label{cap:introducao}
+% =============================================================================
+
+\section{Contextualização}
+
+A mamografia é o exame de imagem usado no rastreamento do câncer de mama, e o seu resultado chega ao médico solicitante e à paciente na forma de um laudo em texto. Para tornar esses laudos comparáveis e menos ambíguos, o \textit{American College of Radiology} mantém o BI-RADS, um léxico padronizado que define como descrever os achados (massas, calcificações, distorções e assimetrias), como classificar a composição da mama e como atribuir uma categoria final de avaliação que orienta a conduta \cite{dorsi2013birads}. \pendente{incluir um dado oficial de incidência do câncer de mama no Brasil (INCA), com referência}
+
+Na prática, a adesão ao léxico é incompleta. Ao analisar 22.247 laudos eletrônicos de mamografia de um hospital universitário brasileiro, \citeonline{serapiao2010} encontraram que apenas 11\% a 61\% dos laudos continham os termos BI-RADS formatados corretamente, que 21\% dos termos descritivos tinham erro de grafia e que a palavra ``microcalcificação'' aparecia escrita de 36 formas diferentes. Esses números mostram que o laudo, que é o registro oficial do exame, pode divergir do padrão e, por consequência, da própria imagem que descreve.
+
+\section{Problema}
+
+Hoje, a conferência entre o que o laudo afirma e o que a imagem mostra, quando acontece, é manual. Não há, ao conhecimento do autor, ferramenta que faça essa verificação de forma automática em mamografia. O problema tratado neste trabalho é, portanto, o seguinte: \textbf{dado um exame de mamografia e o laudo já emitido para ele, identificar automaticamente (i) achados suspeitos presentes na imagem que o laudo não menciona e (ii) descrições do laudo que não conferem com a imagem.}
+
+O primeiro caso é chamado aqui de \textit{omissão}; o segundo, de \textit{discordância}. Em ambos, a saída esperada não é um diagnóstico, e sim um alerta acompanhado da evidência que o motivou, para que o radiologista decida se revisa o laudo.
+
+\section{Objetivos}
+
+\subsection{Objetivo geral}
+
+Desenvolver e avaliar um sistema de auditoria automática de laudos de mamografia que cruze a imagem com o laudo e sinalize omissões de achados suspeitos e discordâncias de descritores BI-RADS, com alertas rastreáveis.
+
+\subsection{Objetivos específicos}
+
+\begin{enumerate}
+  \item Construir um pipeline de pré-processamento de mamografias em formato DICOM, com recorte automático da região da mama, e avaliar o efeito das escolhas de pré-processamento por meio de uma ablação.
+  \item Treinar e avaliar um detector de lesões suspeitas, medindo o desempenho em nível de lesão e em nível de mama, com intervalos de confiança.
+  \item Treinar e avaliar um classificador de categoria BI-RADS e de densidade mamária por mama.
+  \item Desenvolver um extrator que converta laudos em português em uma representação estruturada compatível com o BI-RADS.
+  \item Definir um auditor baseado em regras explícitas que compare as saídas da imagem e do laudo e gere alertas com severidade e evidência.
+  \item Avaliar o sistema completo em um conjunto de laudos reais com erros injetados de forma controlada e comparar com alternativas de referência.
+\end{enumerate}
+
+\section{Contribuições}
+
+As contribuições pretendidas deste trabalho são:
+
+\begin{itemize}
+  \item a aplicação da auditoria automática entre imagem e laudo à mamografia, tarefa até então estudada em radiografia de tórax \cite{mahmood2025factcheck, zou2025corbenchx};
+  \item o uso do léxico BI-RADS como esquema de verificação, e não apenas como rótulo de treinamento;
+  \item o tratamento de laudos em português, usando os laudos reais distribuídos com a base INbreast \cite{moreira2012inbreast};
+  \item uma ablação controlada de pré-processamento para detecção de massas, que separa o efeito do recorte da mama e o do realce de contraste;
+  \item uma avaliação com separação estrita entre validação e teste e com intervalos de confiança por reamostragem de exames.
+\end{itemize}
+
+\section{Escopo e limitações}
+
+O escopo foi delimitado por características dos dados e pelo prazo do trabalho. A base VinDr-Mammo só marca com caixa os achados de categoria BI-RADS 3 ou superior \cite{nguyen2023vindr}; por isso, ``omissão'' significa aqui omissão de achado \textit{suspeito}. O caminho de detecção de calcificações foi retirado do escopo, e o detector concentra-se em massas e em outros achados suspeitos de maior tamanho. O trabalho não contou com revisão por radiologista: as anotações de laudo foram produzidas por anotadores treinados em um protocolo escrito, e a referência de achados em imagem vem das anotações públicas das bases. Os resultados descrevem, portanto, a consistência do sistema frente a esses gabaritos, e não a sua validade diagnóstica em uso clínico.
+
+\section{Organização do trabalho}
+
+O \autoref{cap:fundamentacao} apresenta os conceitos de mamografia, BI-RADS, detecção de objetos e avaliação de detectores, além dos trabalhos relacionados. O \autoref{cap:metodologia} descreve as bases de dados, o pré-processamento, os modelos, o auditor e o protocolo de avaliação. O \autoref{cap:resultados} reporta os resultados, discutidos no \autoref{cap:discussao}. O \autoref{cap:conclusao} conclui o trabalho e aponta trabalhos futuros.

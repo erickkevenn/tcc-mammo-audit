@@ -1,0 +1,118 @@
+% =============================================================================
+\chapter{Resultados}\label{cap:resultados}
+% =============================================================================
+
+Todos os resultados deste capítulo, exceto os da \autoref{sec:res_teste}, foram obtidos no conjunto de validação. Os intervalos entre colchetes são intervalos de confiança de 95\% por \textit{bootstrap} de exames.
+
+\section{Verificação do pré-processamento}
+
+Uma inspeção visual de 300 imagens processadas mostrou 20 casos em que o recorte da mama falhou e a imagem foi mantida sem recorte. Todos eram vistas craniocaudais de mamas pequenas, que ocupavam de 6\% a 10\% do quadro. A causa foi o nível de supressão de pixels claros, calculado sobre o quadro inteiro: como o fundo dominava a imagem, o percentil 95 caía dentro da mama e apagava o tecido denso. Após calcular o percentil apenas sobre os pixels que não são fundo, como descrito no \autoref{cap:metodologia}, a área recortada nesses casos passou a coincidir com a da mama. A correção foi aplicada antes de todos os treinos reportados a seguir.
+
+\pendente{incluir figura com um exemplo antes e depois da correção do recorte}
+
+\section{Detector de lesões}
+
+\subsection{Escolha da configuração de treino}
+
+A \autoref{tab:runs_detector} compara três treinos do detector no braço B0. A métrica é o AP com IoU de 0,5 para massa, medido na validação completa (com todas as imagens normais) e apenas nas imagens com achado. A diferença entre as duas últimas colunas mostra o peso das imagens normais: o mesmo modelo perde mais da metade do AP quando as 1.484 imagens normais da validação entram na conta, porque cada falso positivo nelas reduz a precisão.
+
+\begin{table}[htb]
+  \centering
+  \caption{AP de massa (IoU de 0,5) na validação para três configurações de treino do detector.}
+  \label{tab:runs_detector}
+  \small
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Resolução & Normais no treino & Normais por positiva & Validação completa & Só com achado \\
+    \midrule
+    1.024 & 287 & 0,25 & 0,171 & 0,428 \\
+    \textbf{1.024} & \textbf{1.148} & \textbf{1} & \textbf{0,186} & \textbf{0,448} \\
+    1.536 & 1.148 & 1 & 0,197 & 0,384 \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor.}
+\end{table}
+
+Aumentar o número de imagens normais no treino melhorou as duas colunas. A resolução de 1.536 pixels aumentou o AP na validação completa, mas reduziu o AP nas imagens com achado, ou seja, gerou menos falsos positivos em imagens normais à custa de encontrar menos lesões. Como as diferenças são pequenas diante do tamanho da validação e o treino em 1.536 pixels é mais caro, a configuração escolhida e congelada foi a de 1.024 pixels com uma normal para cada positiva (melhor época: 36).
+
+As classes raras do detector (distorção arquitetural, os três tipos de assimetria e ``outro achado suspeito'') têm de 2 a 21 instâncias na validação, e o AP de todas ficou próximo de zero. Com tão poucos exemplos, não é possível estimar o desempenho nessas classes, e os resultados seguintes tratam apenas de massa.
+
+\subsection{Desempenho em nível de lesão e de mama}
+
+A validação tem 103 caixas de massa e, em nível de mama, 50 mamas com massa e 753 sem. A \autoref{tab:froc_b0} mostra a sensibilidade em nível de lesão do modelo congelado nos pontos de operação da curva FROC.
+
+\begin{table}[htb]
+  \centering
+  \caption{Sensibilidade em nível de lesão (massa) por número de falsos positivos por imagem (FPPI), braço B0, validação.}
+  \label{tab:froc_b0}
+  \begin{tabular}{@{}lcccccc@{}}
+    \toprule
+    FPPI & 0,125 & 0,25 & 0,5 & 1 & 2 & 4 \\
+    \midrule
+    Sensibilidade & 0,408 & 0,466 & 0,563 & 0,612 & 0,689 & 0,786 \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor.}
+\end{table}
+
+A área parcial normalizada sob a FROC, entre 0,125 e 4 FPPI, foi de 0,680 [0,577 a 0,782]. Em nível de mama, a AUC foi de 0,832 [0,768 a 0,889]. Quando o limiar é ajustado para que 10\% das mamas normais gerem alerta, o detector encontra 56,0\% [40,7\% a 70,0\%] das mamas com massa; com 20\% de alertas em mamas normais, encontra 72,0\% [57,1\% a 84,2\%].
+
+\pendente{incluir a figura da curva FROC com a faixa de confiança}
+
+\subsection{Ablação de pré-processamento}
+
+Os braços B2 (com CLAHE) e B4 (sem recorte) foram treinados com a mesma configuração e avaliados da mesma forma que o B0. A \autoref{tab:ablacao} resume o resultado.
+
+\begin{table}[htb]
+  \centering
+  \caption{Ablação de pré-processamento para detecção de massas na validação.}
+  \label{tab:ablacao}
+  \footnotesize
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Métrica & B0 (referência) & B2 (+CLAHE) & B4 (sem recorte) \\
+    \midrule
+    Sensibilidade a 0,5 FPPI & 0,563 & 0,485 & 0,563 \\
+    Sensibilidade a 1 FPPI   & 0,612 & 0,563 & 0,650 \\
+    pAUC FROC (0,125 a 4)    & 0,680 [0,577 a 0,782] & 0,625 [0,524 a 0,731] & 0,691 [0,596 a 0,791] \\
+    AUC por mama             & 0,832 [0,768 a 0,889] & 0,837 [0,777 a 0,891] & 0,837 [0,767 a 0,901] \\
+    Sens. por mama (10\% alertas) & 0,560 [0,407 a 0,700] & 0,600 [0,440 a 0,727] & 0,600 [0,452 a 0,741] \\
+    Sens. por mama (20\% alertas) & 0,720 [0,571 a 0,842] & 0,660 [0,531 a 0,796] & 0,700 [0,558 a 0,841] \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor.}
+\end{table}
+
+Em todas as métricas, os intervalos de confiança dos três braços se sobrepõem amplamente; não foi possível detectar diferença entre eles com o tamanho da validação. O braço com CLAHE teve as menores estimativas em nível de lesão em todos os pontos da FROC (\autoref{tab:froc_bracos}), mas a diferença está dentro da incerteza. O braço sem recorte teve estimativas próximas às do B0.
+
+\begin{table}[htb]
+  \centering
+  \caption{Sensibilidade em nível de lesão por FPPI nos três braços (validação).}
+  \label{tab:froc_bracos}
+  \begin{tabular}{@{}lcccccc@{}}
+    \toprule
+    Braço & 0,125 & 0,25 & 0,5 & 1 & 2 & 4 \\
+    \midrule
+    B0 & 0,408 & 0,466 & 0,563 & 0,612 & 0,689 & 0,786 \\
+    B2 & 0,359 & 0,427 & 0,485 & 0,563 & 0,641 & 0,728 \\
+    B4 & 0,427 & 0,505 & 0,563 & 0,650 & 0,728 & 0,767 \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor.}
+\end{table}
+
+\section{Classificador por mama}
+
+\pendente{kappa ponderado do BI-RADS, macro-F1, acurácia, AUC para BI-RADS 4 ou superior e métricas de densidade na validação; matriz de confusão}
+
+\section{Extração de informação dos laudos}
+
+\pendente{concordância entre os dois anotadores (kappa) e desempenho do extrator E0 (e E1, se houver) por campo}
+
+\section{Auditoria}
+
+\pendente{limiar escolhido; desempenho por tipo de erro injetado; comparação com as referências Z0, Z1 e Z2; exemplos de alertas com evidência}
+
+\section{Avaliação final no teste}\label{sec:res_teste}
+
+\pendente{resultados no teste oficial do VinDr-Mammo e no teste externo CBIS-DDSM, com os modelos e limiares congelados, executados uma única vez}

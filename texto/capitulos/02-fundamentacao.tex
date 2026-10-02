@@ -1,0 +1,49 @@
+% =============================================================================
+\chapter{Fundamentação teórica e trabalhos relacionados}\label{cap:fundamentacao}
+% =============================================================================
+
+\section{Mamografia e o léxico BI-RADS}
+
+O exame de mamografia de rastreamento registra, em geral, duas vistas de cada mama: a craniocaudal (CC) e a mediolateral oblíqua (MLO). Uma mesma lesão costuma aparecer nas duas vistas, em posições diferentes, o que permite ao radiologista confirmar um achado e estimar a sua localização.
+
+O BI-RADS organiza o laudo em três partes principais \cite{dorsi2013birads}. A primeira é a composição da mama, em quatro categorias de densidade (A a D), que vão da mama predominantemente adiposa à extremamente densa. A segunda é a descrição dos achados com um vocabulário controlado: massas, descritas por forma, margem e densidade; calcificações, por morfologia e distribuição; distorções arquiteturais; e assimetrias. A terceira é a categoria final de avaliação, de 0 a 6, em que as categorias 4 e 5 indicam suspeita de malignidade e recomendação de biópsia. Essa estrutura é o que torna possível comparar automaticamente um laudo com a imagem: cada termo do laudo corresponde a um conceito definido, que pode ser buscado na imagem.
+
+\section{Detecção de objetos com redes neurais}
+
+Um detector de objetos recebe uma imagem e devolve um conjunto de caixas delimitadoras, cada uma com uma classe e uma confiança. Os detectores de estágio único, como a família YOLO, fazem a localização e a classificação em uma única passagem pela rede, o que os torna rápidos e adequados a recursos computacionais limitados \cite{jocher2023yolov8}. Neste trabalho, o detector é usado para localizar achados suspeitos na mamografia, e a confiança de cada caixa é a base para decidir se um achado deve gerar alerta.
+
+\pendente{descrever brevemente a arquitetura do YOLOv8 (backbone, neck, cabeça sem âncoras) e incluir uma figura}
+
+\section{Avaliação de detectores em imagem médica}
+
+\subsection{Interseção sobre união e precisão média}
+
+Uma detecção é considerada correta quando a sua sobreposição com uma caixa de referência, medida pela razão entre a interseção e a união das duas áreas (IoU), passa de um limiar, tipicamente 0,5. A precisão média (AP) resume a curva de precisão e revocação de uma classe, e o mAP é a média do AP entre as classes. O AP é a métrica padrão em visão computacional, mas é pouco sensível ao número absoluto de falsos positivos por imagem, que é o que determina a carga de trabalho de quem revisa os alertas \cite{maierhein2024metrics}.
+
+\subsection{Análise FROC}
+
+A análise FROC (\textit{Free-response Receiver Operating Characteristic}) relaciona a sensibilidade em nível de lesão com o número médio de falsos positivos por imagem, à medida que o limiar de confiança varia \cite{bunch1978froc}. Diferente do AP, o eixo horizontal da FROC tem interpretação direta: ``encontrar 60\% das lesões com um falso positivo por imagem'' é uma afirmação que um radiologista consegue avaliar. Por isso, a FROC é a métrica tradicional da detecção assistida por computador em mamografia. Para resumir a curva em um número, usa-se a área parcial sob a FROC em uma faixa clinicamente relevante de falsos positivos por imagem, normalizada para o intervalo de 0 a 1.
+
+\subsection{Intervalos de confiança por reamostragem}
+
+Conjuntos de validação em imagem médica costumam ser pequenos, e uma diferença de poucos pontos entre dois modelos pode ser apenas ruído. O \textit{bootstrap} estima a variabilidade de uma métrica reamostrando com reposição as unidades do conjunto de avaliação \cite{efron1993bootstrap}. Em mamografia, a unidade de reamostragem deve ser o exame, e não a imagem, porque as vistas de um mesmo exame são correlacionadas; reamostrar imagens isoladas subestima a variância.
+
+\section{Trabalhos relacionados}
+
+\subsection{Auditoria entre imagem e laudo}
+
+A verificação automática de laudos contra a imagem foi estudada principalmente em radiografia de tórax. \citeonline{mahmood2025factcheck} propõem um modelo de checagem de fatos ancorado em frases, que detecta erros nos achados e nas suas localizações em laudos gerados automaticamente; a detecção de achados omitidos não é tratada no trabalho. \citeonline{zou2025corbenchx} constroem o CorBenchX, um conjunto de laudos de tórax com erros e um \textit{benchmark} de correção por modelos de visão e linguagem, no qual o melhor modelo comercial avaliado detectou corretamente 50,6\% dos erros. \pendente{incluir RADAR (2026) e MammoVQA, com referências conferidas}
+
+Esses resultados indicam duas lacunas. A primeira é de modalidade: não foi encontrado trabalho que audite laudos de mamografia contra a imagem, nem que use o léxico BI-RADS como esquema de verificação. A segunda é de abordagem: o desempenho modesto dos modelos genéricos de visão e linguagem justifica investigar sistemas com módulos especializados.
+
+\subsection{Detecção e classificação em mamografia}
+
+O VinDr-Mammo é a maior base pública de mamografia digital com anotações de achados por caixa e categorias BI-RADS por mama e por achado, com divisão oficial entre treino e teste \cite{nguyen2023vindr}. O CBIS-DDSM reúne mamografias de filme digitalizado com máscaras de lesões \cite{lee2017cbis}, e o INbreast contém mamografias digitais com anotações detalhadas \cite{moreira2012inbreast}. Entre os modelos recentes, o Mammo-CLIP, um modelo de visão e linguagem pré-treinado em mamografias, relata mAP de cerca de 0,58 na detecção de massas no VinDr-Mammo, e destaca como principal vantagem a eficiência no uso de rótulos \cite{ghosh2024mammoclip}.
+
+\subsection{Pré-processamento}
+
+Duas etapas de pré-processamento são frequentes em mamografia. O recorte da região da mama remove o fundo e aumenta a resolução efetiva da mama na entrada da rede; em classificação no VinDr-Mammo, o recorte elevou a área sob a curva ROC de 79,6 para 83,8 \cite{ibragimov2024mamt4}. O realce de contraste por CLAHE \cite{zuiderveld1994clahe} também é comum, mas a evidência de ganho em aprendizado profundo para mamografia é fraca, e muitos estudos aplicam o recorte e o realce juntos, sem separar o efeito de cada um. \pendente{citar os estudos de ablação de CLAHE (Cancers 16(2):322; Algorithms 18(12):796)} Essa lacuna motiva a ablação apresentada neste trabalho.
+
+\subsection{Laudos em português}
+
+Do lado do texto, \citeonline{serapiao2010} documentaram a baixa adesão ao léxico BI-RADS em laudos brasileiros, usando mineração de texto. \pendente{incluir trabalhos de extração de informação de laudos com LLM e com regras, e recursos em português (BioBERTpt, BRAX)}

@@ -20,12 +20,16 @@ def main() -> None:
     ap.add_argument("--config", default="configs/detector_mass.yaml")
     ap.add_argument("--name", default=None)
     ap.add_argument("--epochs", type=int, default=None)
+    ap.add_argument("--imgsz", type=int, default=None,
+                    help="lado maior da imagem no treino (padrao: imgsz do config). "
+                         "Tem que bater com o --size usado no to_yolo.")
+    ap.add_argument("--patience", type=int, default=None)
     args = ap.parse_args()
 
     from ultralytics import YOLO
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
-    imgsz = cfg.get("imgsz", [1024, 640])
+    imgsz = args.imgsz or cfg.get("imgsz", [1024, 640])
     model = YOLO(f"{cfg['model']}.pt")
     model.train(
         data=args.data,
@@ -39,7 +43,7 @@ def main() -> None:
         lr0=cfg.get("lr0", 0.001),
         cos_lr=cfg.get("cos_lr", True),
         warmup_epochs=cfg.get("warmup_epochs", 3),
-        patience=cfg.get("patience", 15),
+        patience=args.patience or cfg.get("patience", 15),
         workers=cfg.get("workers", 4),
         cache=cfg.get("cache", False),
         # Augmentation: geometrico leve + intensidade. SEM mixup/cutmix (sem

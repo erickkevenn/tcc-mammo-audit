@@ -1,0 +1,32 @@
+% =============================================================================
+\chapter{Discussão}\label{cap:discussao}
+% =============================================================================
+
+\section{Desempenho do detector}
+
+O detector congelado encontra cerca de 61\% das massas com um falso positivo por imagem e, em nível de mama, cerca de 56\% das mamas com massa quando 10\% das mamas normais geram alerta. Para o papel que o detector tem neste trabalho, a leitura em nível de mama é a mais relevante: o auditor não precisa delimitar a lesão com precisão, e sim decidir se uma mama tem um achado suspeito que o laudo deveria mencionar.
+
+A comparação com a literatura exige cuidado. O Mammo-CLIP relata mAP de cerca de 0,58 para massas no VinDr-Mammo \cite{ghosh2024mammoclip}, acima do AP de 0,448 obtido aqui nas imagens com achado. Porém, os protocolos não são iguais: este trabalho usa uma validação própria, retirada do treino oficial, e reporta o AP com e sem as imagens normais, que mudam o resultado em mais de duas vezes (\autoref{tab:runs_detector}). Sem o mesmo conjunto de avaliação e a mesma definição de quais imagens entram na conta, a diferença numérica não permite concluir que um modelo é melhor que o outro. \pendente{conferir no artigo do Mammo-CLIP quais imagens entram no cálculo do mAP e ajustar este parágrafo}
+
+O efeito das imagens normais também orienta a escolha das métricas. O AP na validação completa é baixo (0,186) porque a validação tem cerca de doze imagens normais para cada imagem com massa, a mesma proporção esperada na prática. A FROC e as métricas por mama expressam esse custo de forma direta, em falsos positivos por imagem e em fração de mamas normais com alerta, que é o que determina quantos alertas um revisor precisaria descartar.
+
+\section{Efeito do pré-processamento}
+
+A ablação não detectou diferença entre os braços. Dois pontos merecem comentário. O primeiro é o CLAHE: embora seja uma etapa comum, ele teve as menores estimativas em nível de lesão em todos os pontos de operação. A diferença está dentro da incerteza, mas o resultado não apoia o uso do CLAHE como passo padrão para detecção de massas com este detector. Uma hipótese é que o realce local amplifica a textura do tecido fibroglandular, que se parece com o contorno de uma massa, e aumenta os falsos positivos.
+
+O segundo ponto é o recorte da mama. Em classificação no VinDr-Mammo, o recorte trouxe ganho de cerca de quatro pontos de AUC \cite{ibragimov2024mamt4}; aqui, na detecção de massas, o braço sem recorte ficou próximo da referência. Uma explicação possível é que, na resolução usada, a mama já ocupa a maior parte da imagem depois do espelhamento e do redimensionamento, e o ganho de resolução efetiva com o recorte é pequeno. Outra é que um detector, que avalia regiões locais, depende menos da área ocupada pelo fundo do que um classificador global. Os dados deste trabalho não permitem separar essas explicações.
+
+O resultado nulo da ablação também tem valor prático. Como nenhum braço foi melhor, a referência B0 foi mantida, e o recorte continua sendo usado por reduzir o tamanho dos arquivos e o custo de processamento, e não por um ganho de desempenho demonstrado.
+
+\section{Limitações}
+
+\begin{itemize}
+  \item \textbf{Tamanho da validação.} A validação tem 50 mamas com massa, o que produz intervalos de confiança largos (cerca de 30 pontos percentuais na sensibilidade por mama). Diferenças de poucos pontos entre variantes não podem ser detectadas.
+  \item \textbf{Classes raras.} As classes do detector além de massa têm poucos exemplos e não puderam ser avaliadas. A auditoria de omissão fica, na prática, restrita a massas.
+  \item \textbf{Calcificações.} A detecção de calcificações foi retirada do escopo; omissões de calcificações não são cobertas pelo sistema.
+  \item \textbf{Gabarito da imagem.} O VinDr-Mammo marca com caixa apenas achados de categoria BI-RADS 3 ou superior \cite{nguyen2023vindr}. Achados benignos presentes na imagem não têm caixa e, se detectados, contam como falsos positivos.
+  \item \textbf{Ausência de radiologista.} Não houve revisão clínica das saídas do sistema. As referências são as anotações públicas das bases e as anotações de laudo feitas por anotadores treinados no protocolo de anotação, e a análise de erro limita-se a causas técnicas observáveis.
+  \item \textbf{Semente única.} Cada configuração foi treinada uma vez, com semente fixa. A variação entre sementes não foi medida e se soma à incerteza dos intervalos reportados.
+\end{itemize}
+
+\pendente{discutir o classificador, o extrator e a auditoria quando os resultados estiverem prontos}

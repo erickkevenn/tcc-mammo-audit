@@ -1,0 +1,18 @@
+% =============================================================================
+\chapter{Conclusão}\label{cap:conclusao}
+% =============================================================================
+
+Este trabalho propõe um sistema de auditoria automática de laudos de mamografia, que cruza a imagem com o laudo para sinalizar omissões de achados suspeitos e discordâncias de descritores BI-RADS.
+
+Até o momento, o módulo de imagem está construído e avaliado na validação. O pipeline de pré-processamento parte do DICOM, recorta a mama de forma automática e foi verificado por testes e por inspeção visual, o que levou à correção de uma falha de recorte em mamas pequenas. O detector de massas congelado alcançou AUC de 0,832 em nível de mama e encontra cerca de 56\% das mamas com massa quando 10\% das mamas normais geram alerta. A ablação de pré-processamento não detectou diferença entre usar ou não o realce por CLAHE e entre recortar ou não a mama.
+
+\pendente{completar com os resultados do classificador, do extrator, da auditoria e do teste final; responder a cada objetivo específico do \autoref{cap:introducao}}
+
+\section{Trabalhos futuros}
+
+\begin{itemize}
+  \item Incluir a detecção de calcificações, que exige maior resolução e um detector próprio.
+  \item Ampliar o conjunto de validação ou usar validação cruzada, para reduzir a incerteza das comparações.
+  \item Avaliar o sistema com laudos de outras instituições brasileiras e, com a participação de radiologistas, medir a utilidade clínica dos alertas.
+  \item \pendente{completar ao final do trabalho}
+\end{itemize}

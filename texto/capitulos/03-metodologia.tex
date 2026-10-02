@@ -1,0 +1,183 @@
+% =============================================================================
+\chapter{Materiais e métodos}\label{cap:metodologia}
+% =============================================================================
+
+\section{Visão geral do sistema}
+
+O sistema proposto tem quatro componentes (\autoref{fig:pipeline}). Do lado da imagem, um \textbf{detector de lesões} localiza achados suspeitos em cada vista, e um \textbf{classificador por mama} estima a categoria BI-RADS e a densidade. Do lado do texto, um \textbf{extrator} converte o laudo em uma representação estruturada. Por fim, um \textbf{auditor} baseado em regras compara as duas representações e gera alertas com severidade e evidência. A escolha por módulos especializados, e não por um único modelo de visão e linguagem, segue o desempenho modesto desses modelos na tarefa de verificar laudos (\autoref{cap:fundamentacao}) e privilegia a rastreabilidade: cada alerta pode ser explicado por uma regra e por um limiar declarado.
+
+\begin{figure}[htb]
+  \centering
+  \fbox{\parbox{0.85\textwidth}{\centering\vspace{1.5cm}\pendente{figura do pipeline: imagem $\rightarrow$ detector e classificador; laudo $\rightarrow$ extrator; ambos $\rightarrow$ auditor $\rightarrow$ alerta}\vspace{1.5cm}}}
+  \caption{Visão geral do sistema de auditoria.}
+  \label{fig:pipeline}
+  \fonte{Elaborada pelo autor.}
+\end{figure}
+
+\section{Bases de dados}
+
+Foram usadas três bases públicas, com papéis distintos (\autoref{tab:bases}).
+
+\begin{table}[htb]
+  \centering
+  \caption{Bases de dados usadas e o papel de cada uma no trabalho.}
+  \label{tab:bases}
+  \small
+  \begin{tabular}{@{}p{2.4cm}p{2.6cm}p{4.6cm}p{4.2cm}@{}}
+    \toprule
+    Base & Tipo de imagem & Conteúdo usado & Papel no trabalho \\
+    \midrule
+    VinDr-Mammo \cite{nguyen2023vindr} & Digital (FFDM) & 5.000 exames, 20.000 imagens; caixas de achados com BI-RADS 3 a 5; BI-RADS e densidade por mama & Treino, validação e teste do módulo de imagem \\
+    CBIS-DDSM \cite{lee2017cbis} & Filme digitalizado & Massas com máscara de segmentação, convertidas em caixas & Teste externo \\
+    INbreast \cite{moreira2012inbreast} & Digital (FFDM) & 410 imagens e 117 laudos em português & Corpus de laudos da auditoria \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor.}
+\end{table}
+
+No VinDr-Mammo, o arquivo de anotação de achados tem 20.486 linhas, das quais 2.254 têm caixa delimitadora. As caixas existem apenas para achados de categoria BI-RADS 3, 4 e 5; achados benignos não são marcados. A categoria BI-RADS por mama varia de 1 a 5 (não há categoria 0), e a densidade A ocorre em apenas 50 mamas, motivo pelo qual as densidades A e B foram fundidas em uma única classe. A distribuição por mama é mostrada na \autoref{tab:dist_mamas}.
+
+No CBIS-DDSM, as caixas de massa foram derivadas das máscaras de segmentação, porque as colunas de caminho dos arquivos de metadados trocam de forma inconsistente a imagem recortada e a máscara; cada par foi resolvido pelo conteúdo do arquivo. A conversão do subconjunto de massas resultou em 1.592 imagens e 1.696 caixas. Pacientes presentes tanto no treino quanto no teste oficiais (31) foram movidos inteiros para o teste.
+
+Os laudos do INbreast são arquivos de texto em português, codificados em Latin-1, que contêm a categoria BI-RADS explícita, descritores, quadrantes e negações. A literatura que descreve a base não documenta esses laudos \cite{moreira2012inbreast}; por isso, eles são descritos aqui a partir da inspeção direta do pacote de dados. Por cuidado ético, nenhum laudo é reproduzido integralmente neste texto.
+
+\section{Divisão dos dados}
+
+A divisão segue duas regras. A primeira é usar o teste oficial do VinDr-Mammo (1.000 exames) como teste, sem alterá-lo, para que os resultados sejam comparáveis à literatura. A segunda é que nenhuma decisão de modelagem pode olhar o teste. Para isso, foi criado um conjunto de validação com cerca de 10\% dos exames do treino oficial. A escolha é feita por exame, de modo que as quatro vistas de um exame fiquem sempre no mesmo conjunto, e é determinística: um exame vai para a validação quando o valor derivado do resumo SHA-256 do seu identificador, somado a uma constante fixa, é menor que 0,10. A mesma validação é usada pelo detector e pelo classificador, o que permite calibrar o auditor em um único conjunto sem vazamento entre os módulos.
+
+\begin{table}[htb]
+  \centering
+  \caption{Número de mamas por categoria BI-RADS e por densidade em cada conjunto (VinDr-Mammo).}
+  \label{tab:dist_mamas}
+  \small
+  \begin{tabular}{@{}lrrrrrrrrr@{}}
+    \toprule
+    & \multicolumn{5}{c}{BI-RADS} & \multicolumn{3}{c}{Densidade} & \\
+    \cmidrule(lr){2-6}\cmidrule(lr){7-9}
+    Conjunto & 1 & 2 & 3 & 4 & 5 & A+B & C & D & Total \\
+    \midrule
+    Treino    & 4.821 & 1.677 & 338 & 276 & 80 & 724 & 5.494 & 974 & 7.192 \\
+    Validação &   541 &   194 &  34 &  29 & 10 &  80 &   622 & 106 &   808 \\
+    Teste     & 1.341 &   467 &  93 &  76 & 23 & 200 & 1.530 & 270 & 2.000 \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor a partir de \citeonline{nguyen2023vindr}.}
+\end{table}
+
+Para o detector, cada imagem recebeu um papel. Imagens com ao menos uma caixa de classe do detector são \textit{positivas}; imagens sem nenhuma caixa são \textit{normais}; e 189 imagens cujas caixas eram todas de calcificação ficaram de fora, por não serem nem positivas nem normais limpas para um detector de massas. Validação e teste recebem todas as imagens normais, para medir falsos positivos com a prevalência real. O treino recebe uma imagem normal para cada imagem positiva, escolhidas de forma determinística. A \autoref{tab:split_detector} resume o resultado.
+
+\begin{table}[htb]
+  \centering
+  \caption{Divisão das imagens do VinDr-Mammo para o detector.}
+  \label{tab:split_detector}
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    Conjunto & Imagens positivas & Imagens normais & Caixas & Exames \\
+    \midrule
+    Treino    & 1.148 & 1.148 & 1.358 & 1.514 \\
+    Validação &   121 & 1.484 &   160 &   403 \\
+    Teste     &   310 & 3.643 &   367 & 1.000 \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor.}
+\end{table}
+
+\section{Pré-processamento}
+
+O pré-processamento parte do arquivo DICOM e segue a ordem prevista no padrão: aplicação da transformação de modalidade (\textit{rescale}), recorte da mama, ajuste de intensidade, correção de polaridade, espelhamento canônico e redimensionamento. Imagens marcadas como ``FOR PROCESSING'' são descartadas.
+
+\textbf{Recorte da mama.} A região da mama é localizada por limiarização de Otsu \cite{otsu1979} sobre uma cópia da imagem em que os pixels mais claros foram suprimidos, para remover etiquetas, marcadores metálicos e bordas do detector. O nível de supressão é o percentil 95 calculado apenas sobre os pixels que não são fundo. Esse detalhe é necessário: quando o percentil era calculado sobre o quadro inteiro, em mamas pequenas (que ocupam de 6\% a 10\% do quadro) ele caía dentro da própria mama, o tecido denso era apagado e o recorte era abandonado. Após a limiarização, a imagem é suavizada e dilatada, e a caixa envolvente do maior contorno define o recorte. Contornos com menos de 4\% da área do quadro são rejeitados.
+
+\textbf{Intensidade e polaridade.} A intensidade é ajustada pela janela (centro e largura) e pela função de transformação registradas no cabeçalho DICOM; na ausência delas, usa-se uma normalização pelos percentis 1 e 99 dentro da máscara da mama. Imagens com interpretação fotométrica MONOCHROME1 são invertidas depois do janelamento, para que o tecido apareça sempre claro sobre fundo escuro.
+
+\textbf{Orientação e tamanho.} As imagens da mama direita são espelhadas horizontalmente, de modo que a parede torácica fique sempre à esquerda. Em seguida, a imagem é redimensionada preservando a proporção e completada com zeros até 1.024 $\times$ 640 pixels (altura $\times$ largura). As caixas de referência passam pelas mesmas transformações (deslocamento do recorte, espelhamento, escala e preenchimento), o que é verificado por testes automáticos.
+
+\textbf{Braços da ablação.} Para medir o efeito das escolhas de pré-processamento, foram definidos três braços (\autoref{tab:bracos}), todos com o mesmo ajuste de intensidade pela janela DICOM. O braço B2 isola o efeito do realce de contraste, e o B4, o do recorte.
+
+\begin{table}[htb]
+  \centering
+  \caption{Braços da ablação de pré-processamento.}
+  \label{tab:bracos}
+  \begin{tabular}{@{}llp{6.5cm}@{}}
+    \toprule
+    Braço & Recorte da mama & Realce de contraste \\
+    \midrule
+    B0 (referência) & sim & nenhum \\
+    B2 & sim & CLAHE \cite{zuiderveld1994clahe}, com limite de 2,0 e blocos de 8 $\times$ 8 \\
+    B4 & não & nenhum \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor.}
+\end{table}
+
+\section{Detector de lesões}
+
+O detector é um YOLOv8s \cite{jocher2023yolov8} inicializado com pesos pré-treinados no COCO e treinado para seis classes: massa, distorção arquitetural, assimetria focal, assimetria, assimetria global e ``outro achado suspeito'', que agrupa espessamento e retração de pele, retração de mamilo e linfonodo suspeito, todos com poucos exemplos. A entrada tem lado maior de 1.024 pixels, com lotes retangulares que respeitam a proporção da imagem.
+
+O treino usa o otimizador AdamW com taxa de aprendizado inicial de 0,001 e decaimento em cosseno, aquecimento de três épocas, lote de duas imagens com acumulação de gradiente até um lote nominal de 16, precisão mista e no máximo 80 épocas, com parada antecipada após 15 épocas sem melhora na validação. O aumento de dados é geométrico e leve (espelhamento horizontal, rotação de até 15°, translação de 5\% e escala de 15\%) e inclui variação de brilho; não há espelhamento vertical, \textit{mixup} nem cópia e colagem de objetos. A semente aleatória é fixa e o treino é determinístico.
+
+\pendente{decidir com o orientador se as classes raras serão fundidas em uma classe ou se o detector ficará só com massa, e atualizar esta seção}
+
+\section{Classificador por mama}
+
+O classificador estima a categoria BI-RADS (cinco classes) e a densidade (três classes) de cada mama. A arquitetura é uma EfficientNet-B2 \cite{tan2019efficientnet} pré-treinada no ImageNet, com entrada de um canal e duas cabeças lineares sobre as mesmas características. Como o BI-RADS é ordinal, a perda da categoria é a distância do transportador (\textit{Earth Mover's Distance}) ao quadrado entre as distribuições acumuladas prevista e real \cite{hou2016emd}, que penaliza mais os erros distantes; a densidade usa entropia cruzada com peso 0,5.
+
+O modelo é treinado por imagem, com o rótulo da mama, e a previsão por mama é a média das probabilidades das suas vistas. Para compensar o desequilíbrio das classes (\autoref{tab:dist_mamas}), as imagens são sorteadas com peso proporcional à raiz do inverso da frequência da sua categoria BI-RADS. O treino usa AdamW (taxa de 0,0002, decaimento de pesos de 0,0001), decaimento em cosseno, lote de quatro imagens com acumulação até 16, precisão mista e parada antecipada pelo kappa ponderado na validação. O aumento de dados inclui rotação de até 10°, translação, escala e variação de brilho e contraste, sem espelhamento, para preservar a orientação canônica.
+
+\pendente{incluir a comparação com o Mammo-CLIP \cite{ghosh2024mammoclip} se for aprovada}
+
+\section{Extração de informação do laudo}
+
+O laudo é convertido em uma representação estruturada comum aos dois lados do sistema, em que cada achado tem categoria, lateralidade, região, descritores BI-RADS e um trecho do texto como evidência. Cada campo distingue três estados: \textit{afirmado}, \textit{negado} e \textit{ausente}. A distinção entre ``o laudo diz que não há'' e ``o laudo não diz'' é essencial para a auditoria, porque só o primeiro caso pode contradizer a imagem.
+
+O extrator de referência (E0) é baseado em regras: o laudo é dividido em seções, as seções que não se referem à mamografia (por exemplo, ultrassonografia e axila) são descartadas, o texto é normalizado (minúsculas e sem acentos) e os termos são buscados em um léxico BI-RADS bilíngue, com tratamento de negação pelo contexto da frase. A categoria BI-RADS escrita no laudo, incluindo as subcategorias 4A, 4B e 4C, é extraída por expressão regular.
+
+\pendente{descrever o extrator com LLM local (E1): modelo, quantização, saída em JSON restrita por gramática e prompts}
+
+\section{Auditor}
+
+O auditor é determinístico. Ele compara a representação da imagem com a do laudo e aplica as regras da \autoref{tab:regras}. Duas regiões são consideradas compatíveis quando são iguais, adjacentes ou quando uma delas não foi especificada. Cada alerta recebe uma severidade de 1 (sem erro) a 5 (emergente) \pendente{citar a origem da escala de severidade} e carrega a evidência que o motivou: a caixa e a confiança da imagem e o trecho do laudo.
+
+\begin{table}[htb]
+  \centering
+  \caption{Regras do auditor.}
+  \label{tab:regras}
+  \small
+  \begin{tabular}{@{}lp{4.3cm}p{8cm}@{}}
+    \toprule
+    Código & Tipo & Condição \\
+    \midrule
+    A1 & Omissão de achado suspeito & A imagem contém um achado com confiança acima do limiar e o laudo não o afirma. \\
+    A2 & Achado sem sustentação & O laudo afirma um achado que a imagem não ancora. \\
+    A3 & Discordância de lateralidade & O achado está na mama oposta à indicada no laudo. \\
+    A4 & Discordância de localização & A região do laudo não é compatível com a da imagem. \\
+    A5 & Discordância de descritor & Forma, margem ou outro descritor BI-RADS diverge. \\
+    A6 & Inconsistência de categoria & A categoria BI-RADS do laudo diverge da estimada. \\
+    A7 & Discordância de densidade & A densidade do laudo diverge da estimada. \\
+    A8 & Inconsistência interna & O próprio laudo é contraditório, sem depender da imagem. \\
+    \bottomrule
+  \end{tabular}
+  \fonte{Elaborada pelo autor.}
+\end{table}
+
+O limiar de confiança que transforma uma detecção em achado (usado na regra A1) é calibrado na validação, no ponto de operação escolhido da curva FROC, e congelado antes de qualquer avaliação no teste. \pendente{registrar o ponto de operação escolhido e o valor do limiar}
+
+\section{Protocolo de avaliação}
+
+Todas as comparações entre variantes e todas as escolhas de limiar são feitas na validação. O teste oficial é usado uma única vez, com os modelos congelados, e o CBIS-DDSM é usado como teste externo.
+
+\textbf{Detector.} São reportados: (i) o AP com IoU de 0,5 por classe, na validação completa e apenas nas imagens com achado, para separar o efeito das imagens normais; (ii) a FROC em nível de lesão, com acerto quando a IoU com a caixa de referência é de pelo menos 0,5, e a sensibilidade em 0,125, 0,25, 0,5, 1, 2 e 4 falsos positivos por imagem; (iii) a área parcial sob a FROC entre 0,125 e 4 falsos positivos por imagem, normalizada; e (iv) métricas por mama, em que a pontuação da mama é a maior confiança de massa entre as suas vistas e a mama é positiva quando alguma vista tem caixa de massa. Por mama, reportam-se a AUC e a sensibilidade quando 10\% e 20\% das mamas normais geram alerta. As predições são geradas com confiança mínima de 0,001 e até 20 caixas por imagem, para que a curva FROC alcance 4 falsos positivos por imagem.
+
+\textbf{Intervalos de confiança.} Todos os intervalos de confiança de 95\% são obtidos por \textit{bootstrap} percentil com 1.000 reamostragens de exames \cite{efron1993bootstrap}, com semente fixa. Quando os intervalos de duas variantes se sobrepõem, o texto afirma que não foi possível detectar diferença, e não que as variantes são equivalentes.
+
+\textbf{Classificador.} A métrica principal é o kappa ponderado quadrático da categoria BI-RADS por mama, adequado a classes ordinais \cite{cohen1960kappa}. Também são reportados a macro-F1, a acurácia, a AUC para BI-RADS 4 ou superior (a fronteira que indica biópsia) e, para a densidade, a acurácia e o kappa ponderado.
+
+\textbf{Extração e auditoria.} \pendente{descrever: anotação de cerca de 110 laudos do INbreast com manual de anotação, 30 laudos em duplicata e kappa de Cohen \cite{cohen1960kappa}; métricas por campo do extrator; benchmark de auditoria com erros injetados em laudos reais, condicionados ao contexto; validação de plausibilidade por dois avaliadores; comparação com as referências Z0 (laudo sempre correto), Z1 (léxica) e Z2 (modelo de visão e linguagem sem treino)}
+
+\section{Ambiente computacional}
+
+Os experimentos foram executados em um computador pessoal com placa de vídeo NVIDIA GeForce RTX 3070 (8 GB), em Python 3.11, com PyTorch 2.13 (CUDA 12.6), Ultralytics 8.4 e timm 1.0. O código está em um repositório versionado e é coberto por testes automáticos, que verificam, entre outros pontos, a ausência de vazamento entre conjuntos, o mapeamento das caixas no pré-processamento e o cálculo das métricas. Os dados e os pesos dos modelos não são versionados, em respeito às licenças das bases.
+
+\section{Aspectos éticos e anotação}
+
+As bases usadas são públicas e anonimizadas, e foram obtidas conforme os termos de uso de cada uma. O trabalho não contou com revisão por radiologista. A anotação dos laudos é uma tarefa de extração do que já está escrito, e não de julgamento clínico, e foi feita por anotadores treinados em um manual de anotação escrito; a concordância entre eles mede a consistência do esquema de anotação, e não acurácia clínica. A análise de erro limita-se a causas técnicas observáveis, com o gabarito das bases como referência.

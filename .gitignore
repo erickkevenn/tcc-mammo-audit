@@ -30,3 +30,24 @@ Thumbs.db
 desktop.ini
 .env
 *.log
+
+# LaTeX (texto/)
+texto/**/*.aux
+texto/*.bbl
+texto/*.blg
+texto/*.brf
+texto/*.fdb_latexmk
+texto/*.fls
+texto/*.idx
+texto/*.ilg
+texto/*.ind
+texto/*.lof
+texto/*.lot
+texto/*.out
+texto/*.toc
+texto/*.synctex.gz
+texto/main.pdf
+# figuras do texto podem ser versionadas (excecao ao *.png/*.jpg global)
+!texto/figuras/*.png
+!texto/figuras/*.jpg
+_to_delete/

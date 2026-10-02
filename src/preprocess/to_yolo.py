@@ -111,6 +111,11 @@ def main() -> None:
     ap.add_argument("--overwrite", action="store_true",
                     help="apaga images/ e labels/ da pasta de saida antes de escrever")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--size", type=int, nargs=2, default=None, metavar=("H", "W"),
+                    help="altura e largura de saida (padrao: mass_size do preprocess.yaml)")
+    ap.add_argument("--reuse", default=None,
+                    help="outro cache do MESMO braco: copia de la as imagens ja convertidas "
+                         "em vez de reprocessar o DICOM (so as que faltam sao convertidas)")
     args = ap.parse_args()
 
     import cv2
@@ -119,6 +124,10 @@ def main() -> None:
     arm = args.arm or pre["default_arm"]
     arm_cfg = pre["arms"][arm]
     classes = load("detector_mass.yaml")["classes"]
+    size_tag = ""
+    if args.size and list(args.size) != list(pre["mass_size"]):
+        pre["mass_size"] = list(args.size)
+        size_tag = f"_{args.size[0]}"
 
     img = image_table(load_findings(), classes)
     n_out = int((img.role == "out").sum())
@@ -133,7 +142,7 @@ def main() -> None:
     if args.dry_run:
         return
 
-    out_root = Path(args.out or f"{paths()['out']['cache']}/yolo_{arm}_v2")
+    out_root = Path(args.out or f"{paths()['out']['cache']}/yolo_{arm}_v2{size_tag}")
     existing = out_root / "images"
     if existing.exists() and any(existing.rglob("*.png")):
         if not args.overwrite:
@@ -142,10 +151,27 @@ def main() -> None:
         shutil.rmtree(out_root / "images", ignore_errors=True)
         shutil.rmtree(out_root / "labels", ignore_errors=True)
 
+    reuse = Path(args.reuse) if args.reuse else None
+    if reuse is not None and reuse.resolve() == out_root.resolve():
+        raise SystemExit("--reuse tem que ser outra pasta, nao a propria saida.")
     root = dset("vindr")
-    n_ok = n_skip = 0
+    n_ok = n_skip = n_reused = 0
     records = []
     for r in tqdm(plan.itertuples(index=False), total=len(plan), desc=f"braco {arm}"):
+        if reuse is not None:
+            src_img = reuse / "images" / r.split / f"{r.image_id}.png"
+            src_lbl = reuse / "labels" / r.split / f"{r.image_id}.txt"
+            if src_img.exists() and src_lbl.exists():
+                (out_root / "images" / r.split).mkdir(parents=True, exist_ok=True)
+                (out_root / "labels" / r.split).mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_img, out_root / "images" / r.split / src_img.name)
+                shutil.copy2(src_lbl, out_root / "labels" / r.split / src_lbl.name)
+                n_box = sum(1 for ln in src_lbl.read_text().splitlines() if ln.strip())
+                records.append({"image_id": r.image_id, "study_id": r.study_id, "split": r.split,
+                                "role": r.role, "n_boxes": n_box})
+                n_ok += 1
+                n_reused += 1
+                continue
         dcm = root / paths()["vindr"]["images"] / r.study_id / f"{r.image_id}.dicom"
         if not dcm.exists():
             dcm = dcm.with_suffix(".dcm")
@@ -172,7 +198,7 @@ def main() -> None:
     yaml_txt = (f"path: {out_root}\ntrain: images/training\nval: images/val\ntest: images/test\n"
                 f"names:\n" + "".join(f"  {i}: {c}\n" for i, c in enumerate(classes)))
     (out_root / "data.yaml").write_text(yaml_txt, encoding="utf-8")
-    print(f"\n{n_ok} imagens escritas, {n_skip} ignoradas -> {out_root}")
+    print(f"\n{n_ok} imagens escritas ({n_reused} copiadas de --reuse), {n_skip} ignoradas -> {out_root}")
 
 
 if __name__ == "__main__":
