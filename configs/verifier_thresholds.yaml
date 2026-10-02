@@ -11,3 +11,9 @@ modelos:
   massa: det_mass_B0_v2_neg1
   calcificacao: det_calc_B0
   classificador: cls_b2_imagenet
+regras_principais:
+- V1
+- V3
+- V4
+regras_secundarias:
+- V2

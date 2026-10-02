@@ -135,6 +135,11 @@ def main() -> None:
         print(f"  {g:10s} ({desc}): V1 {pct(s.V1)} | V2 {pct(s.V2)} | V4 {pct(s.V4)} | qualquer {pct(s['any'])}")
     ci = boot_ci(br, orig, swap)
     spec, sens = 1 - orig["any"].mean(), swap["any"].mean()
+    main_any = orig[["V1", "V4"]].any(axis=1)
+    swap_main = swap[["V1", "V4"]].any(axis=1)
+    print("\nSEM A V2 (resultado principal: V1, V3 e V4; V3 nao se aplica ao VinDr, que nao tem texto)")
+    print(f"  originais 4 e 5 com alerta: {pct(main_any[hi])} | todas: {pct(main_any[lo | hi])}")
+    print(f"  trocados rebaixada: {pct(swap_main[hi])} | elevada: {pct(swap_main[lo])}")
     print(f"\nespecificidade nos originais: {spec:.3f} [{ci[0, 0]:.3f} a {ci[1, 0]:.3f}]")
     print(f"sensibilidade nos trocados:   {sens:.3f} [{ci[0, 1]:.3f} a {ci[1, 1]:.3f}]")
     print("  (a maioria dos trocados e 'elevada', porque a validacao tem muito mais mamas 1 a 3)")
@@ -144,7 +149,11 @@ def main() -> None:
            "regra": "percentil (1 - alpha/2) nas mamas 1-2 para cada detector; (1 - alpha) de P(4)+P(5) nas mamas 1-3",
            "mass": round(thr.mass, 6), "calc": round(thr.calc, 6), "cls_ge4": round(thr.cls_ge4, 6),
            "modelos": {"massa": "det_mass_B0_v2_neg1", "calcificacao": "det_calc_B0",
-                       "classificador": "cls_b2_imagenet"}}
+                       "classificador": "cls_b2_imagenet"},
+           # Decisao de 02/10/2026, antes de abrir qualquer teste: resultado principal
+           # com V1, V3 e V4; V2 reportada a parte (depende de o detector achar tudo).
+           "regras_principais": ["V1", "V3", "V4"],
+           "regras_secundarias": ["V2"]}
     Path("configs/verifier_thresholds.yaml").write_text(
         "# Limiares CONGELADOS das regras V1, V2 e V4 (scripts/calibrate_verifier.py).\n"
         "# Nao recalibrar depois de olhar o teste.\n" + yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False),
