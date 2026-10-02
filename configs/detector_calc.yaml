@@ -3,9 +3,12 @@
 model: yolov8s
 tile: {size: 512, stride: 448}
 target_um_per_px: 100
+imgsz: [512, 512]       # recortes de 512 px gerados por src/preprocess/vindr_calc_tiles.py
 batch: 8
+accumulate: 2           # batch nominal 16, igual ao detector de massas
+patience: 15
 amp: true
 epochs: 60
 classes: [suspicious_calcification]
 match_criterion: center_in_gt_box    # IoU e instavel em objeto minusculo
-negative_tile_ratio: 3               # tiles sem lesao por tile com lesao
+negative_tile_ratio: 3               # tiles sem lesao por tile com lesao (--neg-ratio)
