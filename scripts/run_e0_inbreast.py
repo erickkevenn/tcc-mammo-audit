@@ -91,6 +91,10 @@ def main() -> None:
         exams.append({"laudo": r.file, "n_imagens": len(g), "n_categorias_no_texto": len(cats_text),
                       "extraida": ext_exam, "referencia": ref_exam,
                       "igual": ext_exam is not None and birads_to_num(ext_exam) == birads_to_num(ref_exam),
+                      # 4A, 4B e 4C contam como 4 (o VinDr nao tem subcategorias e a
+                      # concordancia entre radiologistas nelas e baixa)
+                      "igual_cat4": ext_exam is not None and
+                      int(birads_to_num(ext_exam) or -1) == int(birads_to_num(ref_exam) or -2),
                       "mesmo_lado_biopsia": (side_of(ext_exam) == side_of(ref_exam))
                       if ext_exam and side_of(ext_exam) is not None and side_of(ref_exam) is not None else None})
         for side in ("L", "R"):
@@ -129,6 +133,7 @@ def main() -> None:
     com = ok[ok.extraida.notna()]
     print(f"categoria do laudo = maior categoria das imagens: {int(com.igual.sum())} de {len(com)}"
           f" ({com.igual.mean():.1%})")
+    print(f"  contando 4A, 4B e 4C como 4: {int(com.igual_cat4.sum())} de {len(com)} ({com.igual_cat4.mean():.1%})")
     lado = com.mesmo_lado_biopsia.dropna()
     print(f"mesmo lado da fronteira de biopsia: {int(lado.sum())} de {len(lado)} ({lado.mean():.1%})")
     print("\nmatriz (linhas = laudo, colunas = imagens):")
