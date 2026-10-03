@@ -1,0 +1,29 @@
+# Protocolo PRE-REGISTRADO da validacao na DMID (ver protocolos/preregistro_dmid.md).
+# Registrado em 2026-10-03, antes do download das imagens e de qualquer predicao.
+# Nao alterar depois de rodar qualquer modelo na DMID.
+base: DMID
+doi: 10.6084/m9.figshare.24522883.v2
+licenca: CC BY 4.0
+arquivos:
+  dicom: {nome: "DICOM Images.zip", url: "https://ndownloader.figshare.com/files/43078726", bytes: 4946030452}
+  laudos: {nome: "Reports.zip", url: "https://ndownloader.figshare.com/files/43077244", bytes: 162988}
+  metadados: {nome: "Metadata.xlsx", url: "https://ndownloader.figshare.com/files/43078363", bytes: 40570}
+unidade: imagem
+categoria: maior categoria escrita no campo BIRADS (ate o primeiro ponto); 4a-4c contam como 4; entram 1 a 5
+grupo: PatientID do DICOM se existir com mais de um valor; senao StudyInstanceUID; senao a imagem
+divisao:
+  calibracao: 0.5
+  avaliacao: 0.5
+  estratificar_por: lado da fronteira do grupo (algum 4/5 = lado 1)
+  semente: 20260819
+calibracao:
+  alpha: 0.05
+  regra: percentil (1 - alpha/2) de massa e de calcificacao nas imagens 1-2; (1 - alpha) de P(4)+P(5) nas 1-3
+avaliacao:
+  doadores_por_imagem: 5
+  semente: 20260819
+  regras_principais: [V1, V3, V4]
+  regras_secundarias: [V2]
+desfecho_principal: acuracia balanceada do principal com limiares calibrados na DMID, metade de avaliacao
+criterio_sucesso: limite inferior do IC 95% da acuracia balanceada > 0.5
+n_boot: 2000
