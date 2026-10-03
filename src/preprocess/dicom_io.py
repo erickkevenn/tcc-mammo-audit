@@ -24,6 +24,10 @@ def read_dicom(path: str | Path) -> tuple[np.ndarray, dict]:
 
     ds = pydicom.dcmread(str(path), force=True)
     arr = ds.pixel_array.astype(np.int32)                     # int32, nao int16
+    color_pm = None
+    if arr.ndim == 3 and arr.shape[-1] in (3, 4):             # DICOM colorido (DMID): vira cinza
+        color_pm = str(getattr(ds, "PhotometricInterpretation", "RGB"))
+        arr = to_gray(arr, color_pm)
 
     slope = float(getattr(ds, "RescaleSlope", 1) or 1)
     inter = float(getattr(ds, "RescaleIntercept", 0) or 0)
@@ -49,6 +53,9 @@ def read_dicom(path: str | Path) -> tuple[np.ndarray, dict]:
         "pixel_spacing": getattr(ds, "PixelSpacing", None) or getattr(ds, "ImagerPixelSpacing", None),
         "manufacturer": str(getattr(ds, "Manufacturer", "") or ""),
     }
+    if color_pm is not None:
+        meta["photometric"] = "MONOCHROME2"
+        meta["convertido_de"] = color_pm
     # Fallback documentado no Mirai: lateralidade pode vir dentro de ViewPosition.
     if not meta["laterality"] and isinstance(meta["view"], str):
         v = meta["view"].upper()
@@ -57,6 +64,20 @@ def read_dicom(path: str | Path) -> tuple[np.ndarray, dict]:
         elif v.startswith("L"):
             meta["laterality"] = "L"
     return arr, meta
+
+
+def to_gray(arr: np.ndarray, photometric: str = "RGB") -> np.ndarray:
+    """Imagem colorida (linhas x colunas x 3 ou 4) -> cinza por luminancia (ITU-R BT.601).
+
+    Alguns DICOM publicos (DMID) gravam a mamografia como RGB de 8 bits. Se os tres
+    canais forem iguais, o resultado e o proprio canal. YBR e convertido para RGB antes.
+    """
+    a = np.asarray(arr)[..., :3]
+    if str(photometric).upper().startswith("YBR"):
+        from pydicom.pixel_data_handlers.util import convert_color_space
+        a = convert_color_space(a.astype(np.uint8), str(photometric).upper(), "RGB")
+    a = a.astype(np.float32)
+    return np.rint(0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]).astype(np.int32)
 
 
 def apply_windowing(arr: np.ndarray, wc: float, ww: float, fn: str = "LINEAR",

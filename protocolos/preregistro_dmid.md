@@ -90,3 +90,24 @@ reamostrada e isso é declarado.
 
 Retreinar modelo, mudar regra, mudar o léxico, escolher outro alfa ou outra divisão
 depois de ver qualquer predição na DMID.
+
+## Emenda 1 (03/10/2026, depois do preparo e ANTES da divisão e de qualquer predição)
+
+O primeiro preparo das imagens (`scripts/dmid_prepare.py`) mostrou três fatos sobre os
+DICOM da DMID, nenhum deles ligado a resultado de modelo:
+
+1. **488 das 510 imagens estão gravadas como cor (RGB de 8 bits)**, e o preparo falhou
+   nelas. Correção de formato, sem mudar o pipeline: a imagem colorida é convertida em
+   cinza por luminância (BT.601) logo depois da leitura (`dicom_io.to_gray`). As imagens
+   em tons de cinza das outras bases não passam por esse trecho.
+2. **Nenhum DICOM traz o tamanho do pixel**, e a publicação da base (Oza et al., 2024,
+   Biomedical Engineering Letters 14(2):317-330) não o informa nas partes consultadas.
+   Vale a regra já registrada: a imagem **não é reamostrada** para a microcalcificação, e
+   isso é declarado como limitação.
+3. **Nenhum DICOM traz `PatientID`**, e cada imagem tem um `StudyInstanceUID` próprio
+   (510 valores). Pela regra registrada, o grupo é o `StudyInstanceUID`, o que equivale a
+   dividir por imagem: imagens da mesma paciente podem cair nas duas metades. Isso é
+   declarado como limitação; a calibração usa só a distribuição de pontuações dos pares
+   consistentes, o que limita o efeito.
+
+Nada mais muda. A divisão, os pares e as predições vêm depois deste registro.
