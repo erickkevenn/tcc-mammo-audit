@@ -70,3 +70,26 @@ def test_cbis_names(tmp_path):
         (d / f"{n}.png").write_bytes(b"")
     t = cb.image_table(d)
     assert list(t.study_id) == ["P_00016", "P_00016"] and list(t.laterality) == ["L", "R"]
+
+
+ab = _load("error_attributes")
+
+
+def test_breast_frame_and_rates():
+    find = pd.DataFrame([
+        # mama s1 L: massa BI-RADS 4, 2 vistas
+        ("i1", "s1", "L", "['Mass']", "BI-RADS 4", 10, 10, 110, 60, "DENSITY C", "BI-RADS 4"),
+        ("i2", "s1", "L", "['No Finding']", None, None, None, None, None, "DENSITY C", "BI-RADS 4"),
+        # mama s1 R: normal
+        ("i3", "s1", "R", "['No Finding']", None, None, None, None, None, "DENSITY C", "BI-RADS 1"),
+    ], columns=["image_id", "study_id", "laterality", "finding_categories", "finding_birads",
+                "xmin", "ymin", "xmax", "ymax", "breast_density", "breast_birads"])
+    preds = pd.DataFrame({"image_id": ["i2", "i3"], "score": [0.7, 0.2]})
+    br = ab.breast_frame(find, preds, "Mass", pd.Series({"i1": 0.1}))
+    L = br[br.laterality == "L"].iloc[0]
+    R = br[br.laterality == "R"].iloc[0]
+    assert L.lesao and L.score == 0.7 and abs(L.size_mm - 10.0) < 1e-9 and L.birads_achado == "4"
+    assert not R.lesao and not R.tem_caixa and R.categoria == "1" and R.densidade == "C"
+    br["detectada"] = br.score >= 0.5
+    t = ab.rate_table(br, "densidade")
+    assert t.loc["C", "n"] == 2 and t.loc["C", "acertos"] == 1
