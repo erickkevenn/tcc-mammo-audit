@@ -80,3 +80,15 @@ def test_paired_tests_runs():
     al = ev.alerts_table(_pairs(), _images(), {"X": [], "Y": []}, THR)
     t = ev.paired_tests(al, "principal (V1+V3+V4)", "so texto (V3)")
     assert t["trocados"]["b_only_a_correct"] == 2 and t["trocados"]["c_only_b_correct"] == 0
+
+
+def test_threshold_per_group_and_lopo():
+    pairs = pd.concat([_pairs().assign(grupo=lambda d: d.grupo + str(i), unidade=lambda d: d.unidade + str(i),
+                                       fonte=lambda d: d.fonte + str(i)) for i in range(3)], ignore_index=True)
+    imgs = {f"{u}{i}": im for i in range(3) for u, im in _images().items()}
+    thr = ev.lopo_thresholds(pairs, imgs, alpha=0.05)
+    assert set(thr) == set(pairs.grupo)
+    # so as unidades Y (categoria 2, lado 0) entram: limiar = pontuacao delas
+    assert all(abs(t.mass - 0.1) < 1e-9 and abs(t.cls_ge4 - 0.1) < 1e-9 for t in thr.values())
+    al = ev.alerts_table(pairs, imgs, None, thr)
+    assert len(al) == len(pairs)

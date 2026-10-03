@@ -106,9 +106,15 @@ def to_yolo_lines(boxes, size):
 
 
 # ----------------------------------------------------------------- imagem
-def prepare(dcm_path: Path, arm_cfg: dict, pre: dict, um_per_px: float = 100.0):
+def prepare(dcm_path: Path, arm_cfg: dict, pre: dict, um_per_px: float = 100.0,
+            fallback_spacing_mm: float | None = None):
     """DICOM -> (img8 recortada, espelhada e reamostrada; mascara; info). None se descartada.
-    Mesma sequencia do to_yolo.process_one, sem o redimensionamento para 1024."""
+    Mesma sequencia do to_yolo.process_one, sem o redimensionamento para 1024.
+
+    fallback_spacing_mm: tamanho do pixel usado quando o DICOM nao traz PixelSpacing
+    nem ImagerPixelSpacing (caso do INbreast: 0,070 mm, Moreira et al. 2012). Sem ele,
+    a imagem nao e reamostrada (escala 1,0), o que foi um defeito nas primeiras
+    predicoes do INbreast."""
     import cv2
 
     from .breast_roi import breast_bbox, breast_mask, canonical_flip, flip_by_content
@@ -139,7 +145,11 @@ def prepare(dcm_path: Path, arm_cfg: dict, pre: dict, um_per_px: float = 100.0):
         img8, flipped = flip_by_content(img8)
     if flipped:
         mask8 = np.ascontiguousarray(mask8[:, ::-1])
-    sp = meta.get("pixel_spacing")
+    sp, sp_src = meta.get("pixel_spacing"), "dicom"
+    if not sp and fallback_spacing_mm:
+        sp, sp_src = [fallback_spacing_mm], "padrao"
+    elif not sp:
+        sp_src = "ausente"
     scale = (float(sp[0]) * 1000.0 / um_per_px) if sp else 1.0
     if abs(scale - 1.0) > 1e-3:
         h, w = img8.shape
@@ -147,7 +157,7 @@ def prepare(dcm_path: Path, arm_cfg: dict, pre: dict, um_per_px: float = 100.0):
         img8 = cv2.resize(img8, (nw, nh), interpolation=cv2.INTER_AREA)
         mask8 = cv2.resize(mask8, (nw, nh), interpolation=cv2.INTER_NEAREST)
     info = {"crop_x0": x0, "crop_y0": y0, "crop_w": crop_w, "flipped": flipped,
-            "scale": round(scale, 6), "h": img8.shape[0], "w": img8.shape[1]}
+            "scale": round(scale, 6), "h": img8.shape[0], "w": img8.shape[1], "spacing_fonte": sp_src}
     return img8, mask8, info
 
 

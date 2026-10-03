@@ -62,7 +62,7 @@ def predict_mass(tab, png_dir, weights, out_csv):
     print(f"massa: {len(rows)} deteccoes em {len(tab)} imagens -> {out_csv}")
 
 
-def predict_calc(tab, weights, out_csv):
+def predict_calc(tab, weights, out_csv, fallback_mm=None):
     from tqdm import tqdm
     from scripts.eval_calc_fullimage import detect_image, tile_image, yolo_predictor
     from src.preprocess.vindr_calc_tiles import prepare
@@ -71,13 +71,14 @@ def predict_calc(tab, weights, out_csv):
     dcm_dir = dset("inbreast") / paths()["inbreast"]["dicoms"]
     fn, rows = yolo_predictor(weights, 512, 0.001), []
     for r in tqdm(tab.itertuples(index=False), total=len(tab), desc="microcalcificacao"):
-        res = prepare(dcm_dir / f"{r.image_id}.dcm", arm, pre, 100.0)
+        res = prepare(dcm_dir / f"{r.image_id}.dcm", arm, pre, 100.0, fallback_spacing_mm=fallback_mm)
         if res is None:
             continue
         img8, mask8, info = res
         for b, s in detect_image(fn, tile_image(img8, mask8, 512, 448, 0.02), 0.3, 20):
             rows.append({"image_id": r.image_id, "x1": b[0], "y1": b[1], "x2": b[2], "y2": b[3], "score": s,
-                         **{k: info[k] for k in ("crop_x0", "crop_y0", "crop_w", "flipped", "scale")}})
+                         **{k: info[k] for k in ("crop_x0", "crop_y0", "crop_w", "flipped", "scale",
+                                                 "spacing_fonte")}})
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     print(f"microcalcificacao: {len(rows)} deteccoes em {len(tab)} imagens -> {out_csv}")
 
@@ -106,6 +107,9 @@ def main() -> None:
     ap.add_argument("--png-dir", default=None)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--calc-spacing-mm", type=float, default=None,
+                    help="CORRECAO pos-teste: tamanho do pixel quando o DICOM nao traz (INbreast: 0.07). "
+                         "Roda so a microcalcificacao e grava calc_preds_esc<um>.csv, sem apagar a original")
     args = ap.parse_args()
     png_dir = Path(args.png_dir or f"{paths()['out']['cache']}/png_inbreast_B0_v2")
     tab = image_table(png_dir)
@@ -117,6 +121,15 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     tag = f"_amostra{args.limit}" if args.limit else ""
     print(f"{len(tab)} imagens, {tab.study_id.nunique()} pacientes")
+    if args.calc_spacing_mm:
+        o = out / f"calc_preds_esc{round(args.calc_spacing_mm * 1000)}{tag}.csv"
+        if o.exists() and not args.overwrite:
+            raise SystemExit(f"{o} ja existe")
+        predict_calc(tab, CALC_W, o, args.calc_spacing_mm)
+        p = pd.read_csv(o)
+        print("escala usada:", p.scale.round(3).value_counts().to_dict(),
+              "| fonte do pixel:", p.spacing_fonte.value_counts().to_dict())
+        return
     # O classificador roda PRIMEIRO: ao ser importado, o ultralytics troca o
     # cv2.imread por uma versao propria que devolve imagem colorida, e o PNG16
     # de um canal chegava ao classificador com 3 canais.

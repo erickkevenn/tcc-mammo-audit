@@ -13,7 +13,8 @@ Metodos comparados (subconjuntos das regras, nos MESMOS pares):
   principal + V2        V2 reportada a parte
   so imagem (V1+V4), so detectores (V1), so classificador (V4)
   so texto (V3)         so no INbreast (o VinDr nao tem texto)
-McNemar pareado: principal contra so texto e contra so imagem.
+McNemar pareado: principal contra so classificador (sempre) e, no INbreast,
+contra so imagem e contra so texto.
 
 Bases:
   vindr_val    validacao do VinDr, pares montados na hora (k=1). Serve para
@@ -24,12 +25,23 @@ Bases:
                maior pontuacao entre as imagens e a maior P(4)+P(5) entre as mamas;
                os achados do laudo saem do extrator E0 congelado.
 
-Saidas: artifacts/verify/resultado_<base>.json e alertas_<base>.csv (sem texto de laudo).
+Saidas: artifacts/verify/resultado_<base>[_<tag>].json e alertas_<base>[_<tag>].csv (sem texto de laudo).
+
+Analises POSTERIORES ao teste (03/10/2026), so no INbreast, reportadas a parte:
+  --calc-preds calc_preds_esc70.csv   correcao de defeito: os DICOM do INbreast nao
+      trazem o tamanho do pixel e as predicoes originais de microcalcificacao foram
+      feitas sem reamostrar (70 um tratados como 100 um).
+  --recalibrar   exploratoria: limiares recalibrados no proprio INbreast, deixando uma
+      paciente de fora por vez, com a mesma regra da calibracao no VinDr e so os
+      pares ORIGINAIS das outras pacientes. Responde se o sistema funcionaria
+      calibrado no local de uso; nao substitui o resultado pre-registrado.
 
 Uso:
   python scripts/evaluate_verification.py --base vindr_val
   python scripts/evaluate_verification.py --base vindr_teste --confirm-test
   python scripts/evaluate_verification.py --base inbreast --confirm-test
+  python scripts/evaluate_verification.py --base inbreast --confirm-test --calc-preds calc_preds_esc70.csv --tag esc70
+  python scripts/evaluate_verification.py --base inbreast --confirm-test --calc-preds calc_preds_esc70.csv --recalibrar --tag esc70_lopo
 """
 from __future__ import annotations
 
@@ -85,14 +97,37 @@ def unit_images(img: pd.DataFrame, mass: pd.DataFrame, calc: pd.DataFrame,
 
 # ------------------------------------------------------------------ regras por par
 def alerts_table(pairs: pd.DataFrame, images: dict[str, BreastImage],
-                 findings: dict[str, list[ReportFinding]] | None, thr: Thresholds) -> pd.DataFrame:
+                 findings: dict[str, list[ReportFinding]] | None,
+                 thr: Thresholds | dict[str, Thresholds]) -> pd.DataFrame:
+    """thr: limiares unicos ou um por grupo (recalibracao deixando o grupo de fora)."""
     rows = []
     for p in pairs.itertuples(index=False):
         f = findings.get(p.fonte, []) if findings is not None else None
-        codes = {a.rule for a in verify_breast(str(p.categoria), images[p.unidade], f, thr)}
+        t = thr[p.grupo] if isinstance(thr, dict) else thr
+        codes = {a.rule for a in verify_breast(str(p.categoria), images[p.unidade], f, t)}
         rows.append({r: r in codes for r in RULES})
     out = pd.concat([pairs.reset_index(drop=True), pd.DataFrame(rows)], axis=1)
     out["verificavel"] = out.categoria.astype(str).map(biopsy_side).notna()
+    return out
+
+
+def lopo_thresholds(pairs: pd.DataFrame, images: dict[str, BreastImage],
+                    alpha: float = 0.05) -> dict[str, Thresholds]:
+    """Para cada grupo, limiares calculados nos pares ORIGINAIS dos outros grupos, com a
+    regra da calibracao no VinDr: percentil (1 - alpha/2) de massa e de calcificacao nas
+    unidades de categoria 1 e 2; percentil (1 - alpha) de P(4)+P(5) nas de 1 a 3."""
+    o = pairs[pairs.tipo == "original"].copy()
+    o["num"] = o.categoria.astype(str).str[0].astype(int)
+    o["mass"] = o.unidade.map(lambda u: images[u].mass_score)
+    o["calc"] = o.unidade.map(lambda u: images[u].calc_score)
+    o["p"] = o.unidade.map(lambda u: images[u].p_ge4)
+    out = {}
+    for g in pairs.grupo.unique():
+        rest = o[o.grupo != g]
+        low12, low13 = rest[rest.num <= 2], rest[rest.lado_imagem == 0]
+        out[g] = Thresholds(float(np.quantile(low12.mass, 1 - alpha / 2)),
+                            float(np.quantile(low12.calc, 1 - alpha / 2)),
+                            float(np.quantile(low13.p, 1 - alpha)))
     return out
 
 
@@ -192,7 +227,7 @@ def vindr_base(split: str):
     return pairs, unit_images(img, mass, calc, cls), None
 
 
-def inbreast_base():
+def inbreast_base(calc_file: str = "calc_preds.csv"):
     from src.data.inbreast import load_index, load_reports
     from src.report.extract_rules import RuleExtractor
     from src.report.schema import Status
@@ -201,7 +236,9 @@ def inbreast_base():
     idx = load_index().rename(columns={"File Name": "acc", "Acquisition date": "date"})
     date = dict(zip(idx.acc.astype(str), idx.date.astype(str)))
     d = Path("artifacts/inbreast")
-    mass, calc, cls = (pd.read_csv(d / f"{n}_preds.csv") for n in ("mass", "calc", "cls"))
+    mass, cls = pd.read_csv(d / "mass_preds.csv"), pd.read_csv(d / "cls_preds.csv")
+    calc = pd.read_csv(d / calc_file)
+    print(f"microcalcificacao: {d / calc_file} | escala {sorted(calc.scale.round(3).unique().tolist())}")
     ids = pd.DataFrame({"image_id": cls.image_id})
     parts = ids.image_id.str.split("_")
     ids["acc"], ids["patient"], ids["lado"] = parts.str[0], parts.str[1], parts.str[3]
@@ -233,25 +270,40 @@ def main() -> None:
     ap.add_argument("--base", required=True, choices=["vindr_val", "vindr_teste", "inbreast"])
     ap.add_argument("--confirm-test", action="store_true")
     ap.add_argument("--n-boot", type=int, default=2000)
+    ap.add_argument("--calc-preds", default="calc_preds.csv", help="INbreast: arquivo em artifacts/inbreast")
+    ap.add_argument("--recalibrar", action="store_true", help="INbreast, exploratoria: limiares por paciente de fora")
+    ap.add_argument("--tag", default="", help="sufixo das saidas")
     args = ap.parse_args()
+    if (args.recalibrar or args.calc_preds != "calc_preds.csv") and args.base != "inbreast":
+        raise SystemExit("--calc-preds e --recalibrar sao so para o INbreast")
     if args.base != "vindr_val" and not args.confirm_test:
         raise SystemExit("Avaliacao final: roda uma vez, com tudo congelado. Use --confirm-test se for isso.")
 
     cfg = yaml.safe_load(Path("configs/verifier_thresholds.yaml").read_text(encoding="utf-8"))
     thr = Thresholds(cfg["mass"], cfg["calc"], cfg["cls_ge4"])
     if args.base == "inbreast":
-        pairs, images, findings = inbreast_base()
+        pairs, images, findings = inbreast_base(args.calc_preds)
         methods = METHODS
     else:
         pairs, images, findings = vindr_base("val" if args.base == "vindr_val" else "test")
         methods = {k: v for k, v in METHODS.items() if k != "so texto (V3)"}
 
-    al = alerts_table(pairs, images, findings, thr)
+    if args.recalibrar:
+        thr_g = lopo_thresholds(pairs, images, cfg["alpha"])
+        tt = pd.DataFrame([vars(t) for t in thr_g.values()])
+        print("limiares recalibrados (uma paciente de fora por vez), mediana [min a max]:")
+        for k in ("mass", "calc", "cls_ge4"):
+            print(f"  {k:8s} {tt[k].median():.4f} [{tt[k].min():.4f} a {tt[k].max():.4f}]")
+        al = alerts_table(pairs, images, findings, thr_g)
+    else:
+        al = alerts_table(pairs, images, findings, thr)
     if not al.verificavel.all():
         raise SystemExit(f"{int((~al.verificavel).sum())} pares com categoria nao verificavel")
     res = evaluate(al, methods, args.n_boot)
 
-    print(f"\n{args.base} | limiares massa {thr.mass:.4f}, calcificacao {thr.calc:.4f}, P(4)+P(5) {thr.cls_ge4:.4f}")
+    if args.recalibrar:
+        print("\nATENCAO: limiares recalibrados no INbreast (analise exploratoria, posterior ao teste)")
+    print(f"\n{args.base}{' ' + args.tag if args.tag else ''} | limiares VinDr massa {thr.mass:.4f}, calcificacao {thr.calc:.4f}, P(4)+P(5) {thr.cls_ge4:.4f}")
     n = res[next(iter(res))]["n"]
     print(f"pares: originais {n['orig']} (1 a 3: {n['orig13']}, 4 e 5: {n['orig45']}) | "
           f"trocados rebaixada {n['rebaixada']}, elevada {n['elevada']}")
@@ -263,8 +315,11 @@ def main() -> None:
     print("\nalertas falsos nos originais, por lado:")
     print(pd.DataFrame(rows).T[["alerta_originais_1a3", "alerta_originais_4e5"]].to_string())
 
-    tests = {"principal x so imagem": paired_tests(al, "principal (V1+V3+V4)", "so imagem (V1+V4)")}
-    if "so texto (V3)" in methods:
+    # principal x so classificador: os detectores (V1) acrescentam algo? Decidido
+    # antes do teste, depois de ver na validacao que a V4 sozinha fica perto do principal.
+    tests = {"principal x so classif.": paired_tests(al, "principal (V1+V3+V4)", "so classificador (V4)")}
+    if "so texto (V3)" in methods:      # no VinDr, sem texto, principal = so imagem
+        tests["principal x so imagem"] = paired_tests(al, "principal (V1+V3+V4)", "so imagem (V1+V4)")
         tests["principal x so texto"] = paired_tests(al, "principal (V1+V3+V4)", "so texto (V3)")
     print("\nMcNemar (acerto = alerta no trocado, silencio no original):")
     for k, t in tests.items():
@@ -274,11 +329,13 @@ def main() -> None:
 
     out = Path("artifacts/verify")
     out.mkdir(parents=True, exist_ok=True)
-    al.to_csv(out / f"alertas_{args.base}.csv", index=False)
-    (out / f"resultado_{args.base}.json").write_text(json.dumps(
-        {"base": args.base, "limiares": cfg, "n_boot": args.n_boot, "metodos": res, "mcnemar": tests},
-        indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\nresultado -> {out / f'resultado_{args.base}.json'}")
+    name = args.base + (f"_{args.tag}" if args.tag else "")
+    al.to_csv(out / f"alertas_{name}.csv", index=False)
+    (out / f"resultado_{name}.json").write_text(json.dumps(
+        {"base": args.base, "tag": args.tag, "calc_preds": args.calc_preds, "recalibrado": args.recalibrar,
+         "limiares": cfg, "n_boot": args.n_boot, "metodos": res, "mcnemar": tests},
+        indent=2, ensure_ascii=False, default=float), encoding="utf-8")
+    print(f"\nresultado -> {out / f'resultado_{name}.json'}")
 
 
 if __name__ == "__main__":
